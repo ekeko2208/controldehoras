@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Cargar Mes Existente - Control de Horas{% endblock %}
+
+{% block content %}
+    <h2>Cargar Mes Existente</h2>
+    {% if available_months %}
+        <form action="{{ url_for('select_month') }}" method="post">
+            <div>
+                <label for="selected_month">Seleccionar Mes:</label>
+                <select id="selected_month" name="selected_month" required>
+                    {% for month_year in available_months %}
+                        <option value="{{ month_year }}">
+                            {{ datetime.strptime(month_year, "%Y-%m").strftime("%B %Y").upper() }}
+                        </option>
+                    {% else %}
+                        <option value="">No hay meses disponibles</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="button-group">
+                <button type="submit">Cargar Mes</button>
+            </div>
+        </form>
+    {% else %}
+        <p>No hay meses guardados para cargar. ¡Empieza a añadir servicios!</p>
+    {% endif %}
+{% endblock %}
