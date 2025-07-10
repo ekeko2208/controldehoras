@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import io
 import math
+from functools import wraps # Importar wraps para el decorador login_required
 
 # --- Configuración de la aplicación Flask ---
 app = Flask(__name__)
@@ -19,7 +20,7 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'una_clave_secreta_muy_l
 # DATABASE_URL será proporcionada por Render en producción.
 # Para desarrollo local, usa tus credenciales de PostgreSQL.
 # Ejemplo: 'postgresql://usuario_db:contraseña_db@localhost:5432/nombre_db'
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://ekeko:ekeko@localhost:5432/control_horas_db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'postgresql://tu_usuario_db:tu_contraseña_db@localhost:5432/control_horas_db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False # Desactivar seguimiento de modificaciones, ahorra memoria
 
 # Configuración de sesiones (basadas en el sistema de archivos)
@@ -82,8 +83,7 @@ class Service(db.Model):
 
 # Decorador para proteger rutas que requieren inicio de sesión
 def login_required(f):
-    from functools import wraps # Importar aquí para evitar problemas de circularidad si se usa en otros módulos
-    @wraps(f)
+    @wraps(f) # Usa wraps para preservar los metadatos de la función original
     def decorated_function(*args, **kwargs):
         # Verificar si el usuario ha iniciado sesión
         if 'logged_in' not in session or not session['logged_in']:
@@ -395,11 +395,11 @@ def delete_service(service_id):
     # Buscar el servicio por ID y user_id para asegurar la propiedad antes de eliminar
     service = Service.query.filter_by(id=service_id, user_id=session.get('user_id')).first_or_404()
     try:
-        db.session.delete(service) # Marcar el servicio para eliminación
-        db.session.commit() # Confirmar la eliminación en la base de datos
+        db.session.delete(service) # Mark the service for deletion
+        db.session.commit() # Confirm deletion in the database
         flash('Servicio eliminado correctamente.', 'success')
     except Exception as e:
-        db.session.rollback() # Deshacer si hay un error
+        db.session.rollback() # Rollback if there's an error
         flash(f'Error al eliminar servicio: {e}', 'danger')
     return redirect(url_for('index'))
 
@@ -454,23 +454,8 @@ def download_pdf():
 
 # --- Ejecutar la aplicación ---
 if __name__ == '__main__':
-    # Este bloque solo se ejecutará cuando ejecutes app.py directamente (ej. `python app.py`)
-    # NO se ejecutará cuando se despliegue con un servidor WSGI como Gunicorn en Render.
-    # Para despliegues, la creación de tablas y el usuario por defecto se manejan de otra forma
-    # (ej. scripts de migración o comandos de inicio del servidor).
-
-    # Crea el contexto de aplicación para que db.create_all() pueda acceder a la configuración de Flask
-    with app.app_context():
-        db.create_all() # Crea todas las tablas definidas en los modelos si no existen
-
-        # Crea el usuario 'admin' por defecto si no existe en la base de datos
-        if not User.query.filter_by(username='admin').first():
-            admin_user = User(username='admin')
-            # ¡CAMBIA ESTA CONTRASEÑA! Usa una contraseña segura y no la dejes en el código fuente.
-            admin_user.set_password('password123') 
-            db.session.add(admin_user)
-            db.session.commit()
-            print("Usuario 'admin' creado por defecto.")
-            
-    # Ejecuta el servidor de desarrollo de Flask
+    # Este bloque solo ejecuta el servidor de desarrollo de Flask.
+    # La inicialización de la base de datos (creación de tablas y usuario admin)
+    # ahora se maneja en un script separado (init_db.py) para el despliegue en Render.
+    # Si necesitas inicializar la DB localmente, puedes ejecutar init_db.py directamente.
     app.run(debug=True)
