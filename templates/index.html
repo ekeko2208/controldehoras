@@ -5,6 +5,18 @@
 {% block content %}
     <h1 class="text-center mb-4">Panel de Control de Horas</h1>
 
+    {# El formulario para añadir servicio se ha movido a su propia página add_service.html #}
+    {# <div class="card mb-4">
+        <div class="card-header">
+            <h3>Añadir Nuevo Servicio</h3>
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('add_service') }}" method="POST">
+                ... (contenido del formulario) ...
+            </form>
+        </div>
+    </div> #}
+
     <div class="card mb-4">
         <div class="card-header d-flex flex-column flex-md-row justify-content-between align-items-md-center">
             <h3 class="mb-2 mb-md-0">Servicios Registrados (
@@ -53,6 +65,7 @@
                             <th>HORA DE SALIDA</th>
                             <th>HORAS TRAB.</th>
                             <th>OBSERVACIONES</th>
+                            <th>TAREAS DETALLADAS</th> {# NUEVA COLUMNA #}
                             <th>ACCIONES</th>
                         </tr>
                     </thead>
@@ -67,6 +80,18 @@
                             <td>{{ service.worked_hours }}</td>
                             <td>{{ service.observations }}</td>
                             <td>
+                                {# Mostrar las sub-tareas #}
+                                {% if service.subtasks %}
+                                    <ul class="list-unstyled mb-0">
+                                        {% for subtask in service.subtasks %}
+                                            <li>{{ subtask.description }} ({{ "%.1f" | format(subtask.hours) }}h)</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
                                 <div class="d-flex flex-column flex-sm-row">
                                     <a href="{{ url_for('edit_service', service_id=service.id) }}" class="btn btn-sm btn-info mb-1 me-sm-1 w-100">Modificar</a>
                                     <form action="{{ url_for('delete_service', service_id=service.id) }}" method="POST" class="w-100">
@@ -77,7 +102,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center py-4">No hay servicios registrados para este mes.</td>
+                            <td colspan="9" class="text-center py-4">No hay servicios registrados para este mes.</td> {# Colspan ajustado #}
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -86,5 +111,4 @@
         </div>
     </div>
 
-    {# El script JavaScript para el checkbox de break fue movido a add_service.html y edit_service.html #}
 {% endblock %}

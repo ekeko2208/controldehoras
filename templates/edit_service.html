@@ -41,15 +41,40 @@
                     <label for="observations" class="form-label">Observaciones:</label>
                     <textarea class="form-control" id="observations" name="observations" rows="3">{{ service.observations }}</textarea>
                 </div>
+
+                {# Sección para Tareas Detalladas #}
+                <div class="mb-4">
+                    <h4>Tareas Detalladas</h4>
+                    <div id="subtasks-container">
+                        {# Las sub-tareas existentes se cargarán aquí #}
+                        {% if service.subtasks %}
+                            {% for subtask in service.subtasks %}
+                                <div class="row mb-2 align-items-center subtask-row">
+                                    <div class="col-md-7">
+                                        <input type="text" class="form-control" name="subtask_description[]" placeholder="Descripción de la tarea" value="{{ subtask.description }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="number" step="0.1" class="form-control" name="subtask_hours[]" placeholder="Horas" value="{{ "%.1f" | format(subtask.hours) }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-danger btn-sm remove-subtask-btn w-100">Eliminar</button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="add-subtask-btn">Añadir Tarea</button>
+                </div>
+
                 <button type="submit" class="btn btn-primary">Guardar Cambios</button>
                 <a href="{{ url_for('index') }}" class="btn btn-secondary ms-2">Cancelar</a>
             </form>
         </div>
     </div>
 
-    {# El script JavaScript se mantiene aquí porque es específico de esta página #}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Lógica para el checkbox de break
             const breakDurationInput = document.getElementById('break_duration');
             const noDiscountBreakCheckbox = document.getElementById('no_discount_break');
 
@@ -57,15 +82,52 @@
                 if (noDiscountBreakCheckbox.checked) {
                     breakDurationInput.dataset.previousValue = breakDurationInput.value;
                     breakDurationInput.value = '0';
-                    breakDurationInput.readOnly = true;
+                    // breakDurationInput.readOnly = true; // No lo hacemos de solo lectura
+                    breakDurationInput.classList.add('text-muted'); // Opcional: para indicar visualmente que no se descuenta
                 } else {
                     breakDurationInput.value = breakDurationInput.dataset.previousValue || '';
-                    breakDurationInput.readOnly = false;
+                    // breakDurationInput.readOnly = false;
+                    breakDurationInput.classList.remove('text-muted');
                 }
             }
 
             noDiscountBreakCheckbox.addEventListener('change', updateBreakInputState);
             updateBreakInputState(); 
+
+            // Lógica para añadir/eliminar sub-tareas
+            const subtasksContainer = document.getElementById('subtasks-container');
+            const addSubtaskBtn = document.getElementById('add-subtask-btn');
+
+            function addSubtaskRow(description = '', hours = '') {
+                const row = document.createElement('div');
+                row.classList.add('row', 'mb-2', 'align-items-center', 'subtask-row');
+                row.innerHTML = `
+                    <div class="col-md-7">
+                        <input type="text" class="form-control" name="subtask_description[]" placeholder="Descripción de la tarea" value="${description}">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="number" step="0.1" class="form-control" name="subtask_hours[]" placeholder="Horas" value="${hours}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-danger btn-sm remove-subtask-btn w-100">Eliminar</button>
+                    </div>
+                `;
+                subtasksContainer.appendChild(row);
+
+                row.querySelector('.remove-subtask-btn').addEventListener('click', function() {
+                    row.remove();
+                });
+            }
+
+            // Si no hay sub-tareas existentes, añadir una fila vacía para empezar
+            if (subtasksContainer.children.length === 0) {
+                addSubtaskRow();
+            }
+
+            // Event listener para el botón "Añadir Tarea"
+            addSubtaskBtn.addEventListener('click', function() {
+                addSubtaskRow();
+            });
         });
     </script>
 {% endblock %}
