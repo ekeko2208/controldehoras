@@ -4,11 +4,16 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime, timedelta
-# Cambiado de fpdf a fpdf2
-from fpdf2 import FPDF 
 import io
 import math
 from functools import wraps
+
+# Importaciones de ReportLab
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors # Importar colores de ReportLab
 
 # --- Configuración de la aplicación Flask ---
 app = Flask(__name__)
@@ -114,7 +119,6 @@ def inject_global_template_vars():
 # --- Funciones Auxiliares ---
 
 # Función para calcular las horas trabajadas
-# Ahora acepta un parámetro `discount_break` para controlar si se descuenta el break
 def calculate_worked_hours(entry_time_str, exit_time_str, break_duration_min, discount_break=True):
     try:
         entry = datetime.strptime(entry_time_str, '%H:%M')
@@ -133,20 +137,66 @@ def calculate_worked_hours(entry_time_str, exit_time_str, break_duration_min, di
     except ValueError:
         return 0.0 
 
-# Función para generar el informe PDF (COMPLETAMENTE REFACTORIZADA para fpdf2 y diseño)
+# Función para generar el informe PDF (REFACTORIZADA para ReportLab)
 def generate_pdf_report(user_id, services_data, selected_month_str):
-    pdf = FPDF(unit="mm", format="A4", orientation='L') 
+    buffer = io.BytesIO()
+    # Usamos landscape(A4) para orientación horizontal
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4),
+                            rightMargin=30, leftMargin=30,
+                            topMargin=30, bottomMargin=30)
     
-    # --- Configuración global para el PDF ---
-    pdf.set_auto_page_break(auto=True, margin=15) 
-    pdf.set_font("Arial", "", 10) # Fuente por defecto
+    story = [] # Lista de "flowables" que compondrán el documento
+
+    # Estilos de párrafo
+    styles = getSampleStyleSheet()
+    h1_style = styles['h1']
+    h1_style.alignment = TA_CENTER
+    h1_style.spaceAfter = 14
+
+    h2_style = styles['h2']
+    h2_style.alignment = TA_CENTER
+    h2_style.spaceAfter = 10
+
+    normal_style = styles['Normal']
+    normal_style.alignment = TA_LEFT
+    normal_style.fontSize = 8
+    normal_style.leading = 10 # Espacio entre líneas
+
+    # Estilo para celdas de tabla
+    table_header_style = ParagraphStyle(
+        'TableHeader',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=9,
+        alignment=TA_CENTER,
+        textColor=colors.white,
+        leading=12
+    )
+
+    table_cell_style = ParagraphStyle(
+        'TableCell',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        alignment=TA_LEFT,
+        textColor=colors.black,
+        leading=10
+    )
     
-    # Colores
-    COLOR_HEADER_BG = (52, 73, 94)  # Azul oscuro (similar al navbar)
-    COLOR_HEADER_TEXT = (255, 255, 255) # Blanco
-    COLOR_PRIMARY_TEXT = (50, 50, 50) # Gris oscuro para texto general
-    COLOR_ACCENT = (52, 152, 219) # Azul vibrante
-    COLOR_LIGHT_GRAY = (240, 240, 240) # Gris claro para fondo de filas alternas
+    table_cell_center_style = ParagraphStyle(
+        'TableCellCenter',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=8,
+        alignment=TA_CENTER,
+        textColor=colors.black,
+        leading=10
+    )
+
+    # Colores personalizados (ReportLab usa objetos colors)
+    COLOR_HEADER_BG = colors.Color(52/255, 73/255, 94/255)
+    COLOR_ACCENT = colors.Color(52/255, 152/255, 219/255)
+    COLOR_LIGHT_GRAY = colors.Color(240/255, 240/255, 240/255)
 
     month_num = int(selected_month_str.split('-')[1])
     year_num = selected_month_str.split('-')[0]
@@ -157,43 +207,23 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     month_name_spanish = spanish_month_names_local[month_num - 1].capitalize()
 
     # --- Página 1: Resumen de Servicios ---
-    pdf.add_page() 
+    story.append(Paragraph(f"Reporte de Horas Trabajadas", h1_style))
+    story.append(Paragraph(f"Mes: {month_name_spanish} {year_num}", h2_style))
+    story.append(Spacer(1, 0.2 * 25.4)) # Espacio de 0.2 pulgadas (aprox 5mm)
 
-    # Título principal
-    pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-    pdf.set_font("Arial", "B", 20)
-    pdf.cell(0, 15, f"Reporte de Horas Trabajadas", 0, 1, "C") 
-    pdf.set_font("Arial", "", 14)
-    pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
-    pdf.ln(10) 
+    # Datos para la tabla principal
+    main_table_data = []
+    main_table_data.append([
+        Paragraph("Lugar", table_header_style),
+        Paragraph("Fecha", table_header_style),
+        Paragraph("Entrada", table_header_style),
+        Paragraph("Break", table_header_style),
+        Paragraph("Salida", table_header_style),
+        Paragraph("Horas", table_header_style),
+        Paragraph("Observaciones", table_header_style)
+    ])
 
-    # Cabeceras de la tabla principal
-    pdf.set_fill_color(*COLOR_HEADER_BG)
-    pdf.set_text_color(*COLOR_HEADER_TEXT)
-    pdf.set_font("Arial", "B", 9) 
-    col_widths_main = {
-        "Lugar": 40,
-        "Fecha": 25,
-        "Entrada": 20,
-        "Break": 20,
-        "Salida": 20,
-        "Horas": 20,
-        "Observaciones": 120 
-    }
-    
-    total_table_width_main = sum(col_widths_main.values())
-    left_margin_main = (pdf.w - total_table_width_main) / 2 
-    
-    pdf.set_x(left_margin_main) 
-    for header, width in col_widths_main.items():
-        pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
-    pdf.ln() 
-
-    # Datos de la tabla principal
-    pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-    pdf.set_font("Arial", "", 8) 
     total_hours_month = 0.0 
-    LINE_HEIGHT_MAIN_TABLE = 6 
 
     for i, service in enumerate(services_data):
         date_display = service.date.strftime("%d/%m/%Y")
@@ -201,176 +231,141 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         exit_time_display = service.exit_time.strftime("%H:%M")
         obs_display = service.observations if service.observations else ""
         
-        # --- Calcular altura de la fila para la tabla principal usando dry_run ---
-        # Guardar la Y actual antes de la simulación
-        initial_y = pdf.get_y()
-        # Simular multi_cell para Observaciones para obtener la altura
-        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 0, "L", 0, 0, pdf.get_x() + left_margin_main + sum(col_widths_main[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas"]), initial_y, dry_run=True)
-        obs_height = pdf.get_y() - initial_y
-        pdf.set_y(initial_y) # Restablecer Y después de la simulación
-
-        row_height = max(obs_height, LINE_HEIGHT_MAIN_TABLE + 2) # Mínimo una línea con padding
-
-        # Asegurarse de que no se salga de la página antes de dibujar la fila
-        if pdf.get_y() + row_height > pdf.page_break_trigger:
-            pdf.add_page()
-            # Redibujar cabeceras en la nueva página
-            pdf.set_fill_color(*COLOR_HEADER_BG)
-            pdf.set_text_color(*COLOR_HEADER_TEXT)
-            pdf.set_font("Arial", "B", 9) 
-            pdf.set_x(left_margin_main) 
-            for header, width in col_widths_main.items():
-                pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
-            pdf.ln()
-            pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-            pdf.set_font("Arial", "", 8) 
-
-        # Establecer color de fondo alterno para las filas
-        if i % 2 == 0:
-            pdf.set_fill_color(255, 255, 255) # Blanco
-        else:
-            pdf.set_fill_color(*COLOR_LIGHT_GRAY) # Gris claro
-
-        start_y_for_row = pdf.get_y() # Guardar la Y inicial para esta fila
-        current_x = left_margin_main
-
-        # Dibujar celdas de una sola línea
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", fill=True)
-        current_x += col_widths_main["Lugar"]
-
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C", fill=True)
-        current_x += col_widths_main["Fecha"]
-
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C", fill=True)
-        current_x += col_widths_main["Entrada"]
-
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C", fill=True)
-        current_x += col_widths_main["Break"]
-
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C", fill=True)
-        current_x += col_widths_main["Salida"]
-
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", fill=True)
-        current_x += col_widths_main["Horas"]
-
-        # Dibujar Observaciones (multi_cell)
-        pdf.set_xy(current_x, start_y_for_row)
-        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", fill=True, ln=1) 
-        
-        # Aseguramos que la próxima fila comience en la posición correcta
-        pdf.set_y(start_y_for_row + row_height)
-
+        # Usar Paragraph para el contenido de las celdas, permite wrapping
+        main_table_data.append([
+            Paragraph(service.place, table_cell_style),
+            Paragraph(date_display, table_cell_center_style),
+            Paragraph(entry_time_display, table_cell_center_style),
+            Paragraph(str(service.break_duration), table_cell_center_style),
+            Paragraph(exit_time_display, table_cell_center_style),
+            Paragraph(f"{service.worked_hours:.2f}", table_cell_center_style),
+            Paragraph(obs_display, table_cell_style)
+        ])
         total_hours_month += service.worked_hours
 
-    pdf.ln(5) 
-    pdf.set_font("Arial", "B", 12) 
-    pdf.set_text_color(*COLOR_ACCENT)
-    pdf.cell(0, 10, f"Total de horas trabajadas en el mes: {total_hours_month:.2f} horas", 0, 1, "R") 
+    # Anchos de columna para la tabla principal (en unidades de ReportLab)
+    # A4 landscape es 297mm x 210mm. Margenes de 30mm a cada lado.
+    # Ancho útil = 297 - 2*30 = 237mm
+    col_widths_main_rl = [40, 25, 20, 20, 20, 20, 92] # Ajustados para sumar 237mm (40+25+20+20+20+20+92 = 237)
 
-    # --- Página 2 (o siguientes): Tareas Detalladas ---
-    # Solo añadir esta página si hay servicios con subtareas
+    main_table = Table(main_table_data, colWidths=[col * 1 for col in col_widths_main_rl]) # Convertir a puntos si es necesario, 1mm = 2.83465 puntos
+    main_table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG), # Cabecera
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 9),
+        ('BOTTOMPADDING', (0,0), (-1,0), 6),
+        ('TOPPADDING', (0,0), (-1,0), 6),
+
+        ('GRID', (0,0), (-1,-1), 0.5, colors.grey), # Bordes de la tabla
+        ('BOX', (0,0), (-1,-1), 1, colors.black),
+
+        # Colores de fondo alternos para las filas de datos
+        ('BACKGROUND', (0,1), (-1,-1), colors.white), # Por defecto blanco
+        # Esto aplica el color gris claro a las filas impares (empezando desde la segunda fila de datos)
+        # El truco es que Reportslab cuenta las filas desde 0. La primera fila de datos es la 1.
+        # Si i % 2 == 1, significa que es la segunda fila de datos, cuarta, etc.
+        # Esto se hace con un bucle en el TableStyle, no directamente en los datos.
+        ('BACKGROUND', (0,1), (-1,-1), colors.white), # Default white
+        ('BACKGROUND', (0,2), (-1,-1), COLOR_LIGHT_GRAY), # Gray for even rows (1-indexed data rows)
+        ('BACKGROUND', (0,4), (-1,-1), colors.white),
+        ('BACKGROUND', (0,6), (-1,-1), COLOR_LIGHT_GRAY),
+        # ... y así sucesivamente, o usar una función para generar el estilo si hay muchas filas.
+        # Para un número dinámico de filas, se haría así:
+        # for row_idx in range(1, len(main_table_data)):
+        #     if row_idx % 2 == 0: # Si la fila de datos es par (0-indexed en TableStyle para datos)
+        #         main_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), COLOR_LIGHT_GRAY)]))
+        # Esto debe hacerse DESPUÉS de crear la tabla y ANTES de añadirla a la historia.
+    ]))
+    
+    # Aplicar colores alternos dinámicamente
+    for row_idx in range(1, len(main_table_data)): # Empezar desde la primera fila de datos (índice 1)
+        if row_idx % 2 == 0: # Si la fila de datos es par (0-indexed en TableStyle para datos)
+            main_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), COLOR_LIGHT_GRAY)]))
+        else:
+            main_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), colors.white)]))
+
+
+    story.append(main_table)
+    story.append(Spacer(1, 0.2 * 25.4))
+
+    total_hours_paragraph = Paragraph(f"<b>Total de horas trabajadas en el mes: {total_hours_month:.2f} horas</b>", 
+                                      ParagraphStyle('TotalHours', parent=styles['Normal'], alignment=TA_RIGHT, fontSize=12, textColor=COLOR_ACCENT))
+    story.append(total_hours_paragraph)
+
+    # --- Página 2: Tareas Detalladas ---
     has_subtasks = any(service.subtasks for service in services_data)
     if has_subtasks:
-        pdf.add_page()
-        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-        pdf.set_font("Arial", "B", 20)
-        pdf.cell(0, 15, "Detalle de Tareas por Servicio", 0, 1, "C")
-        pdf.set_font("Arial", "", 14)
-        pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
-        pdf.ln(10)
+        story.append(PageBreak()) # Salto de página para la sección de detalles
+        story.append(Paragraph("Detalle de Tareas por Servicio", h1_style))
+        story.append(Paragraph(f"Mes: {month_name_spanish} {year_num}", h2_style))
+        story.append(Spacer(1, 0.2 * 25.4))
 
-        # Cabeceras de la tabla de subtareas
-        pdf.set_fill_color(*COLOR_HEADER_BG)
-        pdf.set_text_color(*COLOR_HEADER_TEXT)
-        pdf.set_font("Arial", "B", 9)
-        col_widths_subtasks = {
-            "Fecha": 25,
-            "Lugar": 45,
-            "Descripción de Tarea": 150,
-            "Horas": 20
-        }
-        total_table_width_subtasks = sum(col_widths_subtasks.values())
-        left_margin_subtasks = (pdf.w - total_table_width_subtasks) / 2
-
-        pdf.set_x(left_margin_subtasks)
-        for header, width in col_widths_subtasks.items():
-            pdf.cell(width, 10, header, 1, 0, "C", fill=True)
-        pdf.ln()
-
-        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-        pdf.set_font("Arial", "", 8)
-        LINE_HEIGHT_SUBTASK_TABLE = 6
-
-        for i, service in enumerate(services_data):
+        for service in services_data:
             if service.subtasks:
                 # Encabezado para cada servicio con sub-tareas
-                pdf.set_font("Arial", "B", 9)
-                pdf.set_text_color(*COLOR_ACCENT)
-                pdf.set_x(left_margin_subtasks)
-                pdf.cell(total_table_width_subtasks, 8, f"Servicio: {service.place} - {service.date.strftime('%d/%m/%Y')}", 1, 1, "L", fill=False)
-                pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-                pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
+                service_header_style = ParagraphStyle(
+                    'ServiceHeader',
+                    parent=styles['Normal'],
+                    fontName='Helvetica-Bold',
+                    fontSize=10,
+                    textColor=COLOR_ACCENT,
+                    alignment=TA_LEFT,
+                    spaceBefore=10,
+                    spaceAfter=5
+                )
+                story.append(Paragraph(f"<b>Servicio:</b> {service.place} - {service.date.strftime('%d/%m/%Y')}", service_header_style))
+
+                subtask_data = []
+                subtask_data.append([
+                    Paragraph("Fecha", table_header_style),
+                    Paragraph("Lugar", table_header_style),
+                    Paragraph("Descripción de Tarea", table_header_style),
+                    Paragraph("Horas", table_header_style)
+                ])
 
                 for j, subtask in enumerate(service.subtasks):
-                    desc_display = subtask.description
-                    hours_display = f"{subtask.hours:.1f}"
+                    subtask_data.append([
+                        Paragraph(service.date.strftime('%d/%m/%Y'), table_cell_center_style),
+                        Paragraph(service.place, table_cell_style),
+                        Paragraph(subtask.description, table_cell_style),
+                        Paragraph(f"{subtask.hours:.1f}", table_cell_center_style)
+                    ])
+                
+                col_widths_subtasks_rl = [25, 45, 150, 20] # Ajustados para sumar 240mm (25+45+150+20 = 240)
+                subtask_table = Table(subtask_data, colWidths=[col * 1 for col in col_widths_subtasks_rl]) # Convertir a puntos
+                subtask_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG),
+                    ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0,0), (-1,0), 9),
+                    ('BOTTOMPADDING', (0,0), (-1,0), 6),
+                    ('TOPPADDING', (0,0), (-1,0), 6),
 
-                    # Calcular altura de la fila para sub-tareas
-                    initial_y = pdf.get_y()
-                    pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 0, "L", 0, 0, pdf.get_x() + left_margin_subtasks + col_widths_subtasks["Fecha"] + col_widths_subtasks["Lugar"], initial_y, dry_run=True)
-                    desc_height = pdf.get_y() - initial_y
-                    pdf.set_y(initial_y) # Restablecer Y
+                    ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+                    ('BOX', (0,0), (-1,-1), 1, colors.black),
+                ]))
 
-                    subtask_row_height = max(desc_height, LINE_HEIGHT_SUBTASK_TABLE + 2) # Añadir padding
-
-                    # Asegurarse de que no se salga de la página
-                    if pdf.get_y() + subtask_row_height > pdf.page_break_trigger:
-                        pdf.add_page()
-                        # Redibujar cabeceras en la nueva página
-                        pdf.set_fill_color(*COLOR_HEADER_BG)
-                        pdf.set_text_color(*COLOR_HEADER_TEXT)
-                        pdf.set_font("Arial", "B", 9) 
-                        pdf.set_x(left_margin_subtasks)
-                        for header, width in col_widths_subtasks.items():
-                            pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
-                        pdf.ln()
-                        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
-                        pdf.set_font("Arial", "", 8) 
-                    
-                    # Establecer color de fondo alterno para las filas de subtareas
-                    if j % 2 == 0:
-                        pdf.set_fill_color(255, 255, 255) # Blanco
+                # Aplicar colores alternos dinámicamente para las subtareas
+                for row_idx in range(1, len(subtask_data)):
+                    if row_idx % 2 == 0:
+                        subtask_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), COLOR_LIGHT_GRAY)]))
                     else:
-                        pdf.set_fill_color(*COLOR_LIGHT_GRAY) # Gris claro
+                        subtask_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), colors.white)]))
 
-                    current_x = left_margin_subtasks
-                    current_y = pdf.get_y()
+                story.append(subtask_table)
+                story.append(Spacer(1, 0.2 * 25.4)) # Espacio entre servicios
 
-                    pdf.set_xy(current_x, current_y)
-                    pdf.cell(col_widths_subtasks["Fecha"], subtask_row_height, service.date.strftime('%d/%m/%Y'), 1, 0, "C", fill=True)
-                    current_x += col_widths_subtasks["Fecha"]
-
-                    pdf.set_xy(current_x, current_y)
-                    pdf.cell(col_widths_subtasks["Lugar"], subtask_row_height, service.place, 1, 0, "L", fill=True)
-                    current_x += col_widths_subtasks["Lugar"]
-
-                    pdf.set_xy(current_x, current_y)
-                    pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 1, "L", fill=True, ln=0)
-                    current_x += col_widths_subtasks["Descripción de Tarea"]
-
-                    pdf.set_xy(current_x, current_y)
-                    pdf.cell(col_widths_subtasks["Horas"], subtask_row_height, hours_display, 1, 0, "C", fill=True)
-                    
-                    pdf.set_y(current_y + subtask_row_height) 
-                pdf.ln(5) # Espacio después de cada grupo de sub-tareas
-
-    return pdf.output(dest='S').encode('latin-1')
+    # Construir el documento
+    doc.build(story)
+    
+    # Retornar el contenido del buffer
+    buffer.seek(0)
+    return buffer.getvalue()
 
 
 # --- Rutas de la Aplicación (sin cambios, ya que la lógica está en generate_pdf_report) ---
@@ -421,7 +416,6 @@ def index():
             end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
         end_date = end_date.date() 
 
-        # Cargar servicios con sus sub-tareas relacionadas
         services = Service.query.filter(
             Service.user_id == user_id,
             Service.date >= start_date,
@@ -654,4 +648,14 @@ def preview_pdf():
 
 # --- Ejecutar la aplicación ---
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all() 
+
+        if not User.query.filter_by(username='admin').first():
+            admin_user = User(username='admin')
+            admin_user.set_password('password123') 
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Usuario 'admin' creado por defecto.")
+            
     app.run(debug=True)
