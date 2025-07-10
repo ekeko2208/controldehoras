@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modificar Servicio - Control de Horas</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title>Modificar Servicio</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <style>
         body { padding-top: 20px; }
         .container { max-width: 800px; }
@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="container">
-        <h2 class="mb-4 text-center">Modificar Registro de Servicio</h2>
+        <h1 class="text-center mb-4">Modificar Servicio</h1>
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
@@ -27,47 +27,56 @@
             {% endif %}
         {% endwith %}
 
-        <form action="{{ url_for('edit_service', row_index=row_index) }}" method="POST">
-            <div class="mb-3">
-                <label for="service_location" class="form-label">Lugar del Servicio:</label>
-                <input type="text" class="form-control" id="service_location" name="service_location" value="{{ record['LUGAR DEL SERVICIO'] }}" required>
+        <div class="card">
+            <div class="card-header">
+                <h3>Detalles del Servicio</h3>
             </div>
-            <div class="mb-3">
-                <label for="date" class="form-label">Fecha:</label>
-                <input type="date" class="form-control" id="date" name="date" value="{{ record['FECHA'] }}" required>
+            <div class="card-body">
+                {# La acción del formulario ahora usa service.id, que es el ID único de la base de datos #}
+                <form action="{{ url_for('edit_service', service_id=service.id) }}" method="POST">
+                    <div class="mb-3">
+                        <label for="place" class="form-label">Lugar del Servicio:</label>
+                        <input type="text" class="form-control" id="place" name="place" value="{{ service.place }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="date" class="form-label">Fecha:</label>
+                        {# Usar service.date_str que ya está formateado como 'YYYY-MM-DD' para el input type="date" #}
+                        <input type="date" class="form-control" id="date" name="date" value="{{ service.date_str }}" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="entry_time" class="form-label">Hora de Entrada:</label>
+                            {# Usar service.entry_time_str que ya está formateado como 'HH:MM' #}
+                            <input type="time" class="form-control" id="entry_time" name="entry_time" value="{{ service.entry_time_str }}" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="break_duration" class="form-label">Duración Break (minutos):</label>
+                            <input type="number" class="form-control" id="break_duration" name="break_duration" value="{{ service.break_duration }}" required min="0">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="exit_time" class="form-label">Hora de Salida:</label>
+                            {# Usar service.exit_time_str que ya está formateado como 'HH:MM' #}
+                            <input type="time" class="form-control" id="exit_time" name="exit_time" value="{{ service.exit_time_str }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="no_discount_break" name="no_discount_break" {% if service.break_duration == 0 %}checked{% endif %}>
+                        <label class="form-check-label" for="no_discount_break">No descontar break (si el break es 0, marca esta casilla)</label>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observations" class="form-label">Observaciones:</label>
+                        <textarea class="form-control" id="observations" name="observations" rows="3">{{ service.observations }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                    <a href="{{ url_for('index') }}" class="btn btn-secondary ms-2">Cancelar</a>
+                </form>
             </div>
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <label for="entry_time" class="form-label">Hora de Entrada:</label>
-                    <input type="time" class="form-control" id="entry_time" name="entry_time" value="{{ record['HORA DE ENTRADA'] }}" required>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="break_duration" class="form-label">Duración Break (minutos):</label>
-                    <input type="number" class="form-control" id="break_duration" name="break_duration" value="{{ record['DURACION_BREAK'] }}" required min="0">
-                </div>
-                <div class="col-md-4 mb-3">
-                    <label for="exit_time" class="form-label">Hora de Salida:</label>
-                    <input type="time" class="form-control" id="exit_time" name="exit_time" value="{{ record['HORA DE SALIDA'] }}" required>
-                </div>
-            </div>
-            <div class="mb-3 form-check">
-                <input type="checkbox" class="form-check-input" id="no_discount_break" name="no_discount_break" {% if record['DURACION_BREAK'] == '0' or record['DURACION_BREAK'] == '' %}checked{% endif %}>
-                <label class="form-check-label" for="no_discount_break">No descontar break (si el break es 0, marca esta casilla)</label>
-            </div>
-            <div class="mb-3">
-                <label for="observations" class="form-label">Observaciones:</label>
-                <textarea class="form-control" id="observations" name="observations" rows="3">{{ record['OBSERVACIONES'] }}</textarea>
-            </div>
-            <div class="d-grid gap-2">
-                <button type="submit" class="btn btn-primary btn-lg">Guardar Cambios</button>
-                <a href="{{ url_for('index') }}" class="btn btn-secondary btn-lg">Cancelar</a>
-            </div>
-        </form>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
-        // Script para manejar el checkbox de "No descontar break"
+        // Script para manejar el checkbox de "No descontar break" en el formulario de edición
         document.addEventListener('DOMContentLoaded', function() {
             const breakDurationInput = document.getElementById('break_duration');
             const noDiscountBreakCheckbox = document.getElementById('no_discount_break');
@@ -79,19 +88,13 @@
                 } else {
                     breakDurationInput.readOnly = false;
                     // Si el break era 0 por el checkbox, al desmarcar, limpia el campo para que el usuario ponga un valor
-                    if (breakDurationInput.value === '0' && noDiscountBreakCheckbox.dataset.initialChecked !== 'true') {
-                         breakDurationInput.value = '';
+                    if (breakDurationInput.value === '0') {
+                        breakDurationInput.value = '';
                     }
                 }
             }
-            
-            // Guardar el estado inicial del checkbox para distinguirlo de si el usuario lo marca manualmente
-            if (noDiscountBreakCheckbox.checked) {
-                noDiscountBreakCheckbox.dataset.initialChecked = 'true';
-            }
 
             noDiscountBreakCheckbox.addEventListener('change', updateBreakInputState);
-
             // Inicializar el estado al cargar la página
             updateBreakInputState();
         });
