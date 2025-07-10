@@ -160,7 +160,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     normal_style = styles['Normal']
     normal_style.alignment = TA_LEFT
     normal_style.fontSize = 8
-    normal_style.leading = 10 # Espacio entre líneas
+    normal_style.leading = 12 # Espacio entre líneas, aumentado a 12
 
     # Estilo para celdas de tabla
     table_header_style = ParagraphStyle(
@@ -180,7 +180,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         fontSize=8,
         alignment=TA_LEFT,
         textColor=colors.black,
-        leading=10
+        leading=12 # Aumentado a 12
     )
     
     table_cell_center_style = ParagraphStyle(
@@ -190,7 +190,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         fontSize=8,
         alignment=TA_CENTER,
         textColor=colors.black,
-        leading=10
+        leading=12 # Aumentado a 12
     )
 
     # Colores personalizados (ReportLab usa objetos colors)
@@ -246,9 +246,10 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     # Anchos de columna para la tabla principal (en unidades de ReportLab)
     # A4 landscape es 297mm x 210mm. Margenes de 30mm a cada lado.
     # Ancho útil = 297 - 2*30 = 237mm
-    col_widths_main_rl = [40, 25, 20, 20, 20, 20, 92] # Ajustados para sumar 237mm (40+25+20+20+20+20+92 = 237)
+    # Ajustados para sumar 237mm
+    col_widths_main_rl = [35, 20, 18, 18, 18, 18, 110] 
 
-    main_table = Table(main_table_data, colWidths=[col * 1 for col in col_widths_main_rl]) # Convertir a puntos si es necesario, 1mm = 2.83465 puntos
+    main_table = Table(main_table_data, colWidths=[col * 1 for col in col_widths_main_rl]) 
     main_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG), # Cabecera
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -261,23 +262,6 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
 
         ('GRID', (0,0), (-1,-1), 0.5, colors.grey), # Bordes de la tabla
         ('BOX', (0,0), (-1,-1), 1, colors.black),
-
-        # Colores de fondo alternos para las filas de datos
-        ('BACKGROUND', (0,1), (-1,-1), colors.white), # Por defecto blanco
-        # Esto aplica el color gris claro a las filas impares (empezando desde la segunda fila de datos)
-        # El truco es que Reportslab cuenta las filas desde 0. La primera fila de datos es la 1.
-        # Si i % 2 == 1, significa que es la segunda fila de datos, cuarta, etc.
-        # Esto se hace con un bucle en el TableStyle, no directamente en los datos.
-        ('BACKGROUND', (0,1), (-1,-1), colors.white), # Default white
-        ('BACKGROUND', (0,2), (-1,-1), COLOR_LIGHT_GRAY), # Gray for even rows (1-indexed data rows)
-        ('BACKGROUND', (0,4), (-1,-1), colors.white),
-        ('BACKGROUND', (0,6), (-1,-1), COLOR_LIGHT_GRAY),
-        # ... y así sucesivamente, o usar una función para generar el estilo si hay muchas filas.
-        # Para un número dinámico de filas, se haría así:
-        # for row_idx in range(1, len(main_table_data)):
-        #     if row_idx % 2 == 0: # Si la fila de datos es par (0-indexed en TableStyle para datos)
-        #         main_table.setStyle(TableStyle([('BACKGROUND', (0, row_idx), (-1, row_idx), COLOR_LIGHT_GRAY)]))
-        # Esto debe hacerse DESPUÉS de crear la tabla y ANTES de añadirla a la historia.
     ]))
     
     # Aplicar colores alternos dinámicamente
@@ -334,8 +318,9 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
                         Paragraph(f"{subtask.hours:.1f}", table_cell_center_style)
                     ])
                 
-                col_widths_subtasks_rl = [25, 45, 150, 20] # Ajustados para sumar 240mm (25+45+150+20 = 240)
-                subtask_table = Table(subtask_data, colWidths=[col * 1 for col in col_widths_subtasks_rl]) # Convertir a puntos
+                # Anchos de columna para la tabla de sub-tareas (ajustados para sumar 237mm)
+                col_widths_subtasks_rl = [25, 45, 147, 20] 
+                subtask_table = Table(subtask_data, colWidths=[col * 1 for col in col_widths_subtasks_rl]) 
                 subtask_table.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG),
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
