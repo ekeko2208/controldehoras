@@ -164,7 +164,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         "Break": 20,
         "Salida": 20,
         "Horas": 20,
-        "Observaciones": 120 # Más espacio para observaciones
+        "Observaciones": 120 
     }
     
     total_table_width_main = sum(col_widths_main.values())
@@ -172,13 +172,13 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     
     pdf.set_x(left_margin_main) 
     for header, width in col_widths_main.items():
-        pdf.cell(width, 8, header, 1, 0, "C", fill=True) # Fondo para cabeceras
+        pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
     pdf.ln() 
 
     # Datos de la tabla principal
     pdf.set_font("Arial", "", 7) 
     total_hours_month = 0.0 
-    LINE_HEIGHT_MAIN_TABLE = 6 # Altura de línea para el contenido de la tabla principal
+    LINE_HEIGHT_MAIN_TABLE = 6 
 
     for service in services_data:
         date_display = service.date.strftime("%d/%m/%Y")
@@ -187,16 +187,19 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         obs_display = service.observations if service.observations else ""
         
         # --- Calcular altura de la fila para la tabla principal ---
-        # Estimar el número de líneas para Observaciones
-        text_width_obs = pdf.get_string_width(obs_display)
-        # Calcular cuántas líneas ocuparía el texto en la columna de Observaciones
-        num_lines_obs = math.ceil(text_width_obs / col_widths_main["Observaciones"]) if text_width_obs > 0 else 1
+        # Usamos get_string_width para estimar el ancho del texto y calcular las líneas
+        # Esto es una aproximación para fpdf 1.7.2 sin dry_run
+        num_lines_obs = 1
+        if obs_display:
+            # Calcular el número de líneas que el texto ocuparía en la columna de Observaciones
+            # Multiplicamos por 0.9 para un margen de seguridad
+            char_width_avg = pdf.get_string_width('A') # Ancho promedio de un carácter
+            max_chars_per_line = col_widths_main["Observaciones"] / char_width_avg
+            num_lines_obs = max(1, math.ceil(len(obs_display) / (max_chars_per_line * 0.9))) # Ajuste para envolver
         
-        # La altura de la fila es la máxima de las líneas de contenido, multiplicada por la altura de línea,
-        # asegurando un mínimo para celdas vacías o con poco contenido.
-        row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE) # Mínimo una línea
+        row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE) 
 
-        # Asegurarse de que no se salga de la página
+        # Asegurarse de que no se salga de la página antes de dibujar la fila
         if pdf.get_y() + row_height > pdf.page_break_trigger:
             pdf.add_page()
             pdf.set_x(left_margin_main) 
@@ -210,33 +213,36 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
 
         # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L")
+        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", 0)
         current_x += col_widths_main["Lugar"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C")
+        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C", 0)
         current_x += col_widths_main["Fecha"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C")
+        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
         current_x += col_widths_main["Entrada"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C")
+        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
         current_x += col_widths_main["Break"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C")
+        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
         current_x += col_widths_main["Salida"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C")
+        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
         current_x += col_widths_main["Horas"]
 
         # Dibujar Observaciones (multi_cell)
         pdf.set_xy(current_x, current_y)
-        # El último argumento (ln) es 1 para que el cursor avance a la siguiente línea después de dibujar la celda
+        # multi_cell con ln=1 para que el cursor Y avance a la siguiente línea después de dibujar la celda
         pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", 0, 1) 
+        
+        # Después de la multi_cell, la Y ya está en la posición correcta para la siguiente fila.
+        # No necesitamos forzar pdf.set_y(current_y + row_height) aquí si multi_cell ya lo hizo.
 
         total_hours_month += service.worked_hours
 
