@@ -188,14 +188,12 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         
         # --- Calcular altura de la fila para la tabla principal ---
         # Usamos get_string_width para estimar el ancho del texto y calcular las líneas
-        # Esto es una aproximación para fpdf 1.7.2 sin dry_run
         num_lines_obs = 1
         if obs_display:
             # Calcular el número de líneas que el texto ocuparía en la columna de Observaciones
-            # Multiplicamos por 0.9 para un margen de seguridad
-            char_width_avg = pdf.get_string_width('A') # Ancho promedio de un carácter
-            max_chars_per_line = col_widths_main["Observaciones"] / char_width_avg
-            num_lines_obs = max(1, math.ceil(len(obs_display) / (max_chars_per_line * 0.9))) # Ajuste para envolver
+            # Multiplicamos por 0.9 para un margen de seguridad, ya que get_string_width no considera el wrapping
+            text_width_obs = pdf.get_string_width(obs_display)
+            num_lines_obs = max(1, math.ceil(text_width_obs / (col_widths_main["Observaciones"] * 0.9))) 
         
         row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE) 
 
@@ -212,6 +210,8 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         current_y = pdf.get_y()
 
         # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
+        # Es crucial usar set_xy para cada celda que no sea la última de la fila,
+        # y que el multi_cell final tenga ln=1 para avanzar la Y.
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", 0)
         current_x += col_widths_main["Lugar"]
@@ -243,6 +243,10 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         
         # Después de la multi_cell, la Y ya está en la posición correcta para la siguiente fila.
         # No necesitamos forzar pdf.set_y(current_y + row_height) aquí si multi_cell ya lo hizo.
+        # Sin embargo, para asegurar que la próxima fila comience exactamente en row_height de distancia,
+        # establecemos la Y. Esto es crucial si el multi_cell no ocupa exactamente row_height.
+        pdf.set_y(current_y + row_height)
+
 
         total_hours_month += service.worked_hours
 
