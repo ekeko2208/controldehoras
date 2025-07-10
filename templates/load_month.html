@@ -3,27 +3,16 @@
 {% block title %}Cargar Mes{% endblock %}
 
 {% block content %}
-    <div class="container text-center" style="max-width: 500px; margin-top: 50px;">
-        <h1 class="mb-4">Cargar Mes</h1>
+    <div class="container d-flex justify-content-center align-items-center" style="min-height: calc(100vh - 120px);"> {# Ajustar altura para centrar #}
+        <div class="card p-4 shadow-lg" style="width: 100%; max-width: 450px; border-radius: 1rem;">
+            <h1 class="text-center mb-4 text-primary">Cargar Mes</h1>
 
-        {# Los mensajes flash ya se manejan en base.html #}
-        {# {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flash-messages">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %} #}
-
-        <div class="card p-4 shadow-sm">
             <form action="{{ url_for('load_month') }}" method="POST">
-                <div class="mb-3">
+                <div class="mb-4">
                     <label for="selected_month" class="form-label">Seleccionar Mes:</label>
-                    <input type="month" class="form-control" id="selected_month" name="selected_month" value="{{ current_month }}" required>
+                    <input type="month" class="form-control form-control-lg" id="selected_month" name="selected_month" value="{{ current_month }}" required>
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Cargar Mes</button>
+                <button type="submit" class="btn btn-primary btn-lg w-100">Cargar Mes</button>
             </form>
         </div>
     </div>

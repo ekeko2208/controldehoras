@@ -1,35 +1,22 @@
 {% extends "base.html" %}
 
-{# Sobreescribir el bloque 'title' #}
 {% block title %}Iniciar Sesión{% endblock %}
 
-{# Sobreescribir el bloque de contenido #}
 {% block content %}
-    <div class="container text-center" style="max-width: 500px; margin-top: 50px;">
-        <h1 class="mb-4">Iniciar Sesión</h1>
+    <div class="container d-flex justify-content-center align-items-center" style="min-height: calc(100vh - 120px);"> {# Ajustar altura para centrar #}
+        <div class="card p-4 shadow-lg" style="width: 100%; max-width: 450px; border-radius: 1rem;"> {# Sombra más grande y bordes más redondeados #}
+            <h1 class="text-center mb-4 text-primary">Iniciar Sesión</h1> {# Color al título #}
 
-        {# Los mensajes flash ya se manejan en base.html #}
-        {# {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flash-messages">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %} #}
-
-        <div class="card p-4 shadow-sm">
             <form action="{{ url_for('login') }}" method="POST">
                 <div class="mb-3">
                     <label for="username" class="form-label">Usuario:</label>
-                    <input type="text" class="form-control" id="username" name="username" required>
+                    <input type="text" class="form-control form-control-lg" id="username" name="username" required placeholder="Ingresa tu usuario"> {# Tamaño más grande y placeholder #}
                 </div>
-                <div class="mb-3">
+                <div class="mb-4"> {# Más margen #}
                     <label for="password" class="form-label">Contraseña:</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
+                    <input type="password" class="form-control form-control-lg" id="password" name="password" required placeholder="Ingresa tu contraseña"> {# Tamaño más grande y placeholder #}
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Iniciar Sesión</button>
+                <button type="submit" class="btn btn-primary btn-lg w-100">Iniciar Sesión</button> {# Botón más grande #}
             </form>
         </div>
     </div>
