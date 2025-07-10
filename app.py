@@ -195,7 +195,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
             text_width_obs = pdf.get_string_width(obs_display)
             num_lines_obs = max(1, math.ceil(text_width_obs / (col_widths_main["Observaciones"] * 0.9))) 
         
-        row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE) 
+        row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE + 2) # Añadir un pequeño padding
 
         # Asegurarse de que no se salga de la página antes de dibujar la fila
         if pdf.get_y() + row_height > pdf.page_break_trigger:
@@ -206,46 +206,43 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
             pdf.ln()
             pdf.set_font("Arial", "", 7) 
 
+        start_y_for_row = pdf.get_y() # Guardar la Y inicial para esta fila
         current_x = left_margin_main
-        current_y = pdf.get_y()
 
         # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
-        # Es crucial usar set_xy para cada celda que no sea la última de la fila,
-        # y que el multi_cell final tenga ln=1 para avanzar la Y.
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", 0)
         current_x += col_widths_main["Lugar"]
 
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C", 0)
         current_x += col_widths_main["Fecha"]
 
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
         current_x += col_widths_main["Entrada"]
 
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
         current_x += col_widths_main["Break"]
 
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
         current_x += col_widths_main["Salida"]
 
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
         current_x += col_widths_main["Horas"]
 
         # Dibujar Observaciones (multi_cell)
-        pdf.set_xy(current_x, current_y)
+        pdf.set_xy(current_x, start_y_for_row)
         # multi_cell con ln=1 para que el cursor Y avance a la siguiente línea después de dibujar la celda
         pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", 0, 1) 
         
         # Después de la multi_cell, la Y ya está en la posición correcta para la siguiente fila.
-        # No necesitamos forzar pdf.set_y(current_y + row_height) aquí si multi_cell ya lo hizo.
-        # Sin embargo, para asegurar que la próxima fila comience exactamente en row_height de distancia,
-        # establecemos la Y. Esto es crucial si el multi_cell no ocupa exactamente row_height.
-        pdf.set_y(current_y + row_height)
+        # Aseguramos que la próxima fila comience exactamente en row_height de distancia.
+        # Esto es crucial si el multi_cell no ocupa exactamente row_height.
+        pdf.set_y(start_y_for_row + row_height)
 
 
         total_hours_month += service.worked_hours
@@ -295,7 +292,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
                 # Calcular altura de la fila para sub-tareas
                 text_width_desc = pdf.get_string_width(desc_display)
                 num_lines_desc = math.ceil(text_width_desc / col_widths_subtasks["Descripción de Tarea"]) if text_width_desc > 0 else 1
-                subtask_row_height = max(num_lines_desc * LINE_HEIGHT_SUBTASK_TABLE, LINE_HEIGHT_SUBTASK_TABLE)
+                subtask_row_height = max(num_lines_desc * LINE_HEIGHT_SUBTASK_TABLE, LINE_HEIGHT_SUBTASK_TABLE + 2) # Añadir padding
 
                 # Asegurarse de que no se salga de la página
                 if pdf.get_y() + subtask_row_height > pdf.page_break_trigger:
