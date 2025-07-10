@@ -173,6 +173,9 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     pdf.set_font("Arial", "", 7) 
     total_hours_month = 0.0 
 
+    # Altura de línea base para el texto dentro de las celdas
+    LINE_HEIGHT = 6 
+
     for service in services_data:
         date_display = service.date.strftime("%d/%m/%Y")
         entry_time_display = service.entry_time.strftime("%H:%M")
@@ -182,83 +185,91 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         
         detailed_tasks_display = ""
         if service.subtasks:
-            # Ordenar sub-tareas por horas (o por descripción si prefieres)
             sorted_subtasks = sorted(service.subtasks, key=lambda x: x.hours, reverse=True)
             for subtask in sorted_subtasks:
                 detailed_tasks_display += f"{subtask.description} ({subtask.hours:.1f}h)\n"
-            # Eliminar el último salto de línea si no está vacío
             if detailed_tasks_display:
                 detailed_tasks_display = detailed_tasks_display.strip()
 
-        # --- Calcular la altura de la fila simulando multi_cell ---
-        # Guardar la posición Y inicial antes de la simulación
-        start_y = pdf.get_y()
+        # --- Calcular la altura de la fila ---
+        # Calcular el número de líneas para Observaciones
+        # Usamos pdf.get_string_width para estimar el ancho del texto
+        # y dividimos por el ancho de la columna para obtener las líneas.
+        # Añadimos un pequeño margen de seguridad y nos aseguramos de que sea al menos 1 línea.
+        obs_lines = 1
+        if obs_display:
+            # Estimar el número de caracteres por línea para el ancho de la columna
+            chars_per_line_obs = col_widths["Observaciones"] / pdf.get_string_width('W') # 'W' es un carácter ancho
+            obs_lines = max(1, math.ceil(len(obs_display) / chars_per_line_obs))
+            # Una estimación más precisa sería usar pdf.get_string_width(obs_display)
+            # y dividirlo por col_widths["Observaciones"], pero eso solo funciona si el texto no se envuelve.
+            # Para multi_cell, la estimación por caracteres es más robusta sin dry_run.
+
+        # Calcular el número de líneas para Tareas Detalladas
+        tasks_lines = detailed_tasks_display.count('\n') + 1 if detailed_tasks_display else 1
         
-        # Simular Observaciones para obtener su altura
-        pdf.multi_cell(col_widths["Observaciones"], 6, obs_display, 0, "L", 0, 0, pdf.get_x() + left_margin + sum(col_widths[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas"]), start_y, dry_run=True)
-        obs_height = pdf.get_y() - start_y
-        pdf.set_y(start_y) # Restablecer Y después de la simulación
-
-        # Simular Tareas Detalladas para obtener su altura
-        pdf.multi_cell(col_widths["Tareas Detalladas"], 6, detailed_tasks_display, 0, "L", 0, 0, pdf.get_x() + left_margin + sum(col_widths[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas", "Observaciones"]), start_y, dry_run=True)
-        tasks_height = pdf.get_y() - start_y
-        pdf.set_y(start_y) # Restablecer Y después de la simulación
-
-        # La altura final de la fila es la máxima de todas las columnas de texto, con un mínimo de 6mm
-        row_height = max(obs_height, tasks_height, 6)
+        # La altura de la fila es la máxima de las líneas de contenido, multiplicada por la altura de línea,
+        # asegurando un mínimo para celdas vacías o con poco contenido.
+        row_height = max(obs_lines, tasks_lines, 1) * LINE_HEIGHT
+        
+        # Asegurarse de que no se salga de la página antes de dibujar la fila
+        if pdf.get_y() + row_height > pdf.page_break_trigger:
+            pdf.add_page()
+            pdf.set_x(left_margin) # Redibujar cabeceras en la nueva página
+            for header, width in col_widths.items():
+                pdf.cell(width, 7, header, 1, 0, "C") 
+            pdf.ln()
+            pdf.set_font("Arial", "", 7) # Restablecer fuente después de cabeceras
 
         # --- Dibujar la fila con la altura calculada ---
         current_x = left_margin
-        current_y = start_y
+        current_y = pdf.get_y() # Obtener la Y actual para la fila
 
-        # Columna Lugar
+        # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Lugar"], row_height, service.place, 1, 0, "L", 0)
         current_x += col_widths["Lugar"]
 
-        # Columna Fecha
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Fecha"], row_height, date_display, 1, 0, "C", 0)
         current_x += col_widths["Fecha"]
 
-        # Columna Entrada
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
         current_x += col_widths["Entrada"]
 
-        # Columna Break
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
         current_x += col_widths["Break"]
 
-        # Columna Salida
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
         current_x += col_widths["Salida"]
 
-        # Columna Horas
         pdf.set_xy(current_x, current_y)
         pdf.cell(col_widths["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
         current_x += col_widths["Horas"]
 
-        # Columna Observaciones (multi_cell)
+        # Dibujar Observaciones (multi_cell)
         pdf.set_xy(current_x, current_y)
-        # multi_cell no necesita el borde interior ya que el padre lo dibujará,
-        # pero para que funcione con el row_height, debe ser una celda con borde
-        # para que se extienda. El 6 es la altura de línea, no la altura de la celda total.
-        pdf.multi_cell(col_widths["Observaciones"], 6, obs_display, 1, "L", 0) 
-        # FPDF automáticamente avanza Y al final del multi_cell si ln no es 0
-        # No avanzamos current_x aquí ya que multi_cell maneja su propia posición y no devuelve la x final.
-        current_x += col_widths["Observaciones"] # Solo para el siguiente set_xy
+        # El último argumento de multi_cell (ln) debe ser 0 para que no avance la Y
+        # y podamos dibujar la siguiente celda en la misma línea "virtual".
+        pdf.multi_cell(col_widths["Observaciones"], LINE_HEIGHT, obs_display, 1, "L", 0, 0) 
+        current_x += col_widths["Observaciones"]
 
-        # Columna Tareas Detalladas (multi_cell)
+        # Dibujar Tareas Detalladas (multi_cell)
         pdf.set_xy(current_x, current_y)
-        pdf.multi_cell(col_widths["Tareas Detalladas"], 6, detailed_tasks_display, 1, "L", 0) 
+        # El último argumento de multi_cell (ln) debe ser 1 para que avance la Y a la siguiente línea
+        pdf.multi_cell(col_widths["Tareas Detalladas"], LINE_HEIGHT, detailed_tasks_display, 1, "L", 0, 1) 
 
-        # Avanzar la posición Y del PDF para la siguiente fila, basándose en la altura real de la fila actual
-        # Es importante que pdf.set_y se haga después de todas las celdas de la fila.
-        pdf.set_y(start_y + row_height)
-        
+        # Asegurarse de que la posición Y del PDF esté al final de la fila más alta
+        # FPDF.multi_cell con ln=1 ya debería haber avanzado la Y, pero es bueno verificar.
+        # Si la altura calculada (row_height) es mayor que lo que multi_cell avanzó, forzamos la Y.
+        # Esto es más complejo de manejar con multi_cell en la misma línea,
+        # una alternativa es dibujar todas las celdas con set_xy y luego avanzar Y.
+        # Para simplificar y asegurar, podemos forzar la Y a la altura de la fila.
+        pdf.set_y(current_y + row_height) # Forzamos la Y para la siguiente fila
+
         total_hours_month += service.worked_hours
 
     pdf.ln(5) 
