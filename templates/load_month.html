@@ -1,28 +1,30 @@
 {% extends "base.html" %}
 
-{% block title %}Cargar Mes Existente - Control de Horas{% endblock %}
+{% block title %}Cargar Mes{% endblock %}
 
 {% block content %}
-    <h2>Cargar Mes Existente</h2>
-    {% if available_months %}
-        <form action="{{ url_for('select_month') }}" method="post">
-            <div>
-                <label for="selected_month">Seleccionar Mes:</label>
-                <select id="selected_month" name="selected_month" required>
-                    {% for month_year in available_months %}
-                        <option value="{{ month_year }}">
-                            {{ datetime.strptime(month_year, "%Y-%m").strftime("%B %Y").upper() }}
-                        </option>
-                    {% else %}
-                        <option value="">No hay meses disponibles</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="button-group">
-                <button type="submit">Cargar Mes</button>
-            </div>
-        </form>
-    {% else %}
-        <p>No hay meses guardados para cargar. ¡Empieza a añadir servicios!</p>
-    {% endif %}
+    <div class="container text-center" style="max-width: 500px; margin-top: 50px;">
+        <h1 class="mb-4">Cargar Mes</h1>
+
+        {# Los mensajes flash ya se manejan en base.html #}
+        {# {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flash-messages">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %} #}
+
+        <div class="card p-4 shadow-sm">
+            <form action="{{ url_for('load_month') }}" method="POST">
+                <div class="mb-3">
+                    <label for="selected_month" class="form-label">Seleccionar Mes:</label>
+                    <input type="month" class="form-control" id="selected_month" name="selected_month" value="{{ current_month }}" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">Cargar Mes</button>
+            </form>
+        </div>
+    </div>
 {% endblock %}

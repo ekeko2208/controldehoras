@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import io
 import math
-from functools import wraps # Importar wraps para el decorador login_required
+from functools import wraps
 
 # --- Configuración de la aplicación Flask ---
 app = Flask(__name__)
@@ -41,7 +41,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     # Aumentado el tamaño del String para el hash de la contraseña (de 128 a 255 o 512)
-    password_hash = db.Column(db.String(255), nullable=False) # <--- ¡CORREGIDO AQUÍ!
+    password_hash = db.Column(db.String(255), nullable=False) 
     # Relación uno-a-muchos: un usuario puede tener muchos servicios
     # 'Service' es el nombre del modelo relacionado
     # 'backref='user'' crea un atributo 'user' en el modelo Service para acceder al usuario
@@ -320,7 +320,10 @@ def add_service():
             date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
             entry_time_obj = datetime.strptime(entry_time_str, '%H:%M').time()
             exit_time_obj = datetime.strptime(exit_time_str, '%H:%M').time()
-            break_duration_min = int(break_duration_str)
+            
+            # Si el checkbox "no_discount_break" está marcado, el break_duration es 0
+            no_discount_break = 'no_discount_break' in request.form
+            break_duration_min = 0 if no_discount_break else int(break_duration_str)
             
             worked_hours = calculate_worked_hours(entry_time_str, exit_time_str, break_duration_min)
             
@@ -357,13 +360,15 @@ def edit_service(service_id):
 
     if request.method == 'POST':
         try:
-            # Actualizar los atributos del servicio con los datos del formulario
             service.place = request.form['place']
             service.date = datetime.strptime(request.form['date'], '%Y-%m-%d').date()
             service.entry_time = datetime.strptime(request.form['entry_time'], '%H:%M').time()
-            service.break_duration = int(request.form['break_duration'])
             service.exit_time = datetime.strptime(request.form['exit_time'], '%H:%M').time()
             service.observations = request.form.get('observations', '').strip()
+
+            # Si el checkbox "no_discount_break" está marcado, el break_duration es 0
+            no_discount_break = 'no_discount_break' in request.form
+            service.break_duration = 0 if no_discount_break else int(request.form['break_duration'])
 
             # Recalcular las horas trabajadas
             service.worked_hours = calculate_worked_hours(
@@ -432,14 +437,12 @@ def download_pdf():
             end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
         end_date = end_date.date()
         
-        # Obtener los servicios del usuario para el mes seleccionado
         services = Service.query.filter(
             Service.user_id == user_id,
             Service.date >= start_date,
             Service.date <= end_date
         ).order_by(Service.date).all()
         
-        # Generar el PDF y enviarlo como archivo
         pdf_output = generate_pdf_report(user_id, services, selected_month_str)
 
         return send_file(
@@ -451,6 +454,41 @@ def download_pdf():
     except Exception as e:
         flash(f"Error al generar el PDF: {e}", "danger")
         return redirect(url_for('index'))
+
+# NUEVA RUTA: Vista previa del PDF
+@app.route('/preview_pdf')
+@login_required
+def preview_pdf():
+    user_id = session.get('user_id')
+    selected_month_str = session.get('current_month_selected')
+
+    try:
+        selected_month_dt = datetime.strptime(selected_month_str, "%Y-%m")
+        start_date = selected_month_dt.replace(day=1).date()
+        if selected_month_dt.month == 12:
+            end_date = selected_month_dt.replace(year=selected_month_dt.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
+        end_date = end_date.date()
+        
+        services = Service.query.filter(
+            Service.user_id == user_id,
+            Service.date >= start_date,
+            Service.date <= end_date
+        ).order_by(Service.date).all()
+        
+        pdf_output = generate_pdf_report(user_id, services, selected_month_str)
+
+        # Enviar el PDF para que se visualice en el navegador (Content-Disposition: inline)
+        return send_file(
+            io.BytesIO(pdf_output),
+            mimetype='application/pdf',
+            as_attachment=False # <--- CAMBIO CLAVE: False para vista previa
+        )
+    except Exception as e:
+        flash(f"Error al generar la vista previa del PDF: {e}", "danger")
+        return redirect(url_for('index'))
+
 
 # --- Ejecutar la aplicación ---
 if __name__ == '__main__':
