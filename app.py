@@ -243,18 +243,20 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         ])
         total_hours_month += service.worked_hours
 
-    # Anchos de columna para la tabla principal (en unidades de ReportLab)
+    # Anchos de columna para la tabla principal (en MM)
     # A4 landscape es 297mm x 210mm. Margenes de 30mm a cada lado.
     # Ancho útil = 297 - 2*30 = 237mm
     # Ajustados para sumar 237mm
-    col_widths_main_rl = [35, 20, 18, 18, 18, 18, 110] 
+    # He ajustado los anchos para dar más espacio a las columnas de tiempo/break y observaciones
+    col_widths_main_mm = [35, 25, 25, 25, 25, 25, 77] # Suma 237mm
 
-    main_table = Table(main_table_data, colWidths=[col * 1 for col in col_widths_main_rl]) 
+    # Convertir anchos de MM a puntos (1mm = 2.83465 puntos)
+    main_table = Table(main_table_data, colWidths=[col * 2.83465 for col in col_widths_main_mm]) 
     main_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG), # Cabecera
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'), # Alineación horizontal de cabeceras
+        ('VALIGN', (0,0), (-1,0), 'TOP'), # Alineación vertical de cabeceras para permitir wrapping
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ('FONTSIZE', (0,0), (-1,0), 9),
         ('BOTTOMPADDING', (0,0), (-1,0), 6),
@@ -318,14 +320,14 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
                         Paragraph(f"{subtask.hours:.1f}", table_cell_center_style)
                     ])
                 
-                # Anchos de columna para la tabla de sub-tareas (ajustados para sumar 237mm)
-                col_widths_subtasks_rl = [25, 45, 147, 20] 
-                subtask_table = Table(subtask_data, colWidths=[col * 1 for col in col_widths_subtasks_rl]) 
+                # Anchos de columna para la tabla de sub-tareas (en MM, ajustados para sumar 237mm)
+                col_widths_subtasks_mm = [25, 45, 147, 20] 
+                subtask_table = Table(subtask_data, colWidths=[col * 2.83465 for col in col_widths_subtasks_mm]) 
                 subtask_table.setStyle(TableStyle([
                     ('BACKGROUND', (0,0), (-1,0), COLOR_HEADER_BG),
                     ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-                    ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                    ('ALIGN', (0,0), (-1,0), 'CENTER'),
+                    ('VALIGN', (0,0), (-1,0), 'TOP'), # Alineación vertical de cabeceras
                     ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                     ('FONTSIZE', (0,0), (-1,0), 9),
                     ('BOTTOMPADDING', (0,0), (-1,0), 6),
