@@ -152,14 +152,14 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
 
     pdf.set_font("Arial", "B", 8) 
     col_widths = {
-        "Lugar": 35,        # Ajustado
-        "Fecha": 20,        # Ajustado
-        "Entrada": 15,      # Ajustado
-        "Break": 15,        # Ajustado
-        "Salida": 15,       # Ajustado
-        "Horas": 15,        # Ajustado
-        "Observaciones": 60, # Ajustado
-        "Tareas Detalladas": 90 # NUEVA COLUMNA
+        "Lugar": 35,
+        "Fecha": 20,
+        "Entrada": 15,
+        "Break": 15,
+        "Salida": 15,
+        "Horas": 15,
+        "Observaciones": 60,
+        "Tareas Detalladas": 90
     }
     
     total_table_width = sum(col_widths.values())
@@ -179,10 +179,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
         exit_time_display = service.exit_time.strftime("%H:%M")
 
         obs_display = service.observations if service.observations else ""
-        if len(obs_display) > (col_widths["Observaciones"] / pdf.get_string_width('A') * 0.8): 
-            obs_display = obs_display[:int(col_widths["Observaciones"] / pdf.get_string_width('A') * 0.7)] + "..."
         
-        # Preparar las tareas detalladas para el PDF
         detailed_tasks_display = ""
         if service.subtasks:
             # Ordenar sub-tareas por horas (o por descripción si prefieres)
@@ -193,44 +190,74 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
             if detailed_tasks_display:
                 detailed_tasks_display = detailed_tasks_display.strip()
 
-        # Calcular la altura de la fila basándose en el contenido más largo (observaciones o tareas)
-        # Esto es una estimación simple, para un control más preciso se necesitaría calcular text_height
-        # con pdf.multi_cell o similar, pero para empezar, un factor multiplicador es suficiente.
-        obs_lines = math.ceil(pdf.get_string_width(obs_display) / col_widths["Observaciones"]) if obs_display else 1
-        tasks_lines = detailed_tasks_display.count('\n') + 1 if detailed_tasks_display else 1
-        row_height = max(obs_lines, tasks_lines) * 6 # 6mm por línea de texto
-
-        pdf.set_x(left_margin) 
-        # Usar multi_cell para las observaciones y tareas detalladas para que envuelvan el texto
-        # Guardar la posición actual para dibujar las celdas de una sola línea
-        x_start = pdf.get_x()
-        y_start = pdf.get_y()
-
-        pdf.multi_cell(col_widths["Lugar"], 6, service.place, 1, "L", 0, 0, x_start, y_start)
-        pdf.multi_cell(col_widths["Fecha"], 6, date_display, 1, "C", 0, 0, x_start + col_widths["Lugar"], y_start)
-        pdf.multi_cell(col_widths["Entrada"], 6, entry_time_display, 1, "C", 0, 0, x_start + col_widths["Lugar"] + col_widths["Fecha"], y_start)
-        pdf.multi_cell(col_widths["Break"], 6, str(service.break_duration), 1, "C", 0, 0, x_start + col_widths["Lugar"] + col_widths["Fecha"] + col_widths["Entrada"], y_start)
-        pdf.multi_cell(col_widths["Salida"], 6, exit_time_display, 1, "C", 0, 0, x_start + col_widths["Lugar"] + col_widths["Fecha"] + col_widths["Entrada"] + col_widths["Break"], y_start)
-        pdf.multi_cell(col_widths["Horas"], 6, f"{service.worked_hours:.2f}", 1, "C", 0, 0, x_start + col_widths["Lugar"] + col_widths["Fecha"] + col_widths["Entrada"] + col_widths["Break"] + col_widths["Salida"], y_start)
+        # --- Calcular la altura de la fila simulando multi_cell ---
+        # Guardar la posición Y inicial antes de la simulación
+        start_y = pdf.get_y()
         
-        # Para Observaciones y Tareas Detalladas, necesitamos un enfoque especial para multilínea
-        # Dibujar la celda de Observaciones y luego la de Tareas Detalladas
-        # Para asegurar que la altura de la fila se respete, dibujamos las celdas de una sola línea y luego las multilínea
-        # y avanzamos la posición Y del PDF.
+        # Simular Observaciones para obtener su altura
+        pdf.multi_cell(col_widths["Observaciones"], 6, obs_display, 0, "L", 0, 0, pdf.get_x() + left_margin + sum(col_widths[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas"]), start_y, dry_run=True)
+        obs_height = pdf.get_y() - start_y
+        pdf.set_y(start_y) # Restablecer Y después de la simulación
 
-        # Guardamos la posición X actual después de las celdas de una sola línea
-        current_x_after_single_cells = x_start + col_widths["Lugar"] + col_widths["Fecha"] + col_widths["Entrada"] + col_widths["Break"] + col_widths["Salida"] + col_widths["Horas"]
-        
-        # Dibujar Observaciones
-        pdf.set_xy(current_x_after_single_cells, y_start)
-        pdf.multi_cell(col_widths["Observaciones"], 6, obs_display, 1, "L", 0)
+        # Simular Tareas Detalladas para obtener su altura
+        pdf.multi_cell(col_widths["Tareas Detalladas"], 6, detailed_tasks_display, 0, "L", 0, 0, pdf.get_x() + left_margin + sum(col_widths[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas", "Observaciones"]), start_y, dry_run=True)
+        tasks_height = pdf.get_y() - start_y
+        pdf.set_y(start_y) # Restablecer Y después de la simulación
 
-        # Dibujar Tareas Detalladas
-        pdf.set_xy(current_x_after_single_cells + col_widths["Observaciones"], y_start)
-        pdf.multi_cell(col_widths["Tareas Detalladas"], 6, detailed_tasks_display, 1, "L", 0)
+        # La altura final de la fila es la máxima de todas las columnas de texto, con un mínimo de 6mm
+        row_height = max(obs_height, tasks_height, 6)
 
-        # Avanzar a la siguiente línea, usando la altura máxima de la fila
-        pdf.set_xy(left_margin, y_start + row_height) # Ajustar la posición Y para la siguiente fila
+        # --- Dibujar la fila con la altura calculada ---
+        current_x = left_margin
+        current_y = start_y
+
+        # Columna Lugar
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Lugar"], row_height, service.place, 1, 0, "L", 0)
+        current_x += col_widths["Lugar"]
+
+        # Columna Fecha
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Fecha"], row_height, date_display, 1, 0, "C", 0)
+        current_x += col_widths["Fecha"]
+
+        # Columna Entrada
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
+        current_x += col_widths["Entrada"]
+
+        # Columna Break
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
+        current_x += col_widths["Break"]
+
+        # Columna Salida
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
+        current_x += col_widths["Salida"]
+
+        # Columna Horas
+        pdf.set_xy(current_x, current_y)
+        pdf.cell(col_widths["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
+        current_x += col_widths["Horas"]
+
+        # Columna Observaciones (multi_cell)
+        pdf.set_xy(current_x, current_y)
+        # multi_cell no necesita el borde interior ya que el padre lo dibujará,
+        # pero para que funcione con el row_height, debe ser una celda con borde
+        # para que se extienda. El 6 es la altura de línea, no la altura de la celda total.
+        pdf.multi_cell(col_widths["Observaciones"], 6, obs_display, 1, "L", 0) 
+        # FPDF automáticamente avanza Y al final del multi_cell si ln no es 0
+        # No avanzamos current_x aquí ya que multi_cell maneja su propia posición y no devuelve la x final.
+        current_x += col_widths["Observaciones"] # Solo para el siguiente set_xy
+
+        # Columna Tareas Detalladas (multi_cell)
+        pdf.set_xy(current_x, current_y)
+        pdf.multi_cell(col_widths["Tareas Detalladas"], 6, detailed_tasks_display, 1, "L", 0) 
+
+        # Avanzar la posición Y del PDF para la siguiente fila, basándose en la altura real de la fila actual
+        # Es importante que pdf.set_y se haga después de todas las celdas de la fila.
+        pdf.set_y(start_y + row_height)
         
         total_hours_month += service.worked_hours
 
@@ -241,7 +268,7 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     return pdf.output(dest='S').encode('latin-1')
 
 
-# --- Rutas de la Aplicación ---
+# --- Rutas de la Aplicación (sin cambios, ya que la lógica está en generate_pdf_report) ---
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
