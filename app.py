@@ -132,9 +132,11 @@ def calculate_worked_hours(entry_time_str, exit_time_str, break_duration_min, di
     except ValueError:
         return 0.0 
 
-# Función para generar el informe PDF
+# Función para generar el informe PDF (COMPLETAMENTE REFACTORIZADA)
 def generate_pdf_report(user_id, services_data, selected_month_str):
     pdf = FPDF(unit="mm", format="A4", orientation='L') 
+    
+    # --- Página 1: Resumen de Servicios ---
     pdf.add_page() 
     pdf.set_auto_page_break(auto=True, margin=15) 
 
@@ -146,135 +148,181 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     ]
     month_name_spanish = spanish_month_names_local[month_num - 1].capitalize()
 
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, f"Reporte de horas trabajadas para el mes de {month_name_spanish} {year_num}", 0, 1, "C") 
+    # Título principal
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(0, 15, f"Reporte de Horas Trabajadas", 0, 1, "C") 
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
     pdf.ln(10) 
 
+    # Cabeceras de la tabla principal
     pdf.set_font("Arial", "B", 8) 
-    col_widths = {
-        "Lugar": 35,
-        "Fecha": 20,
-        "Entrada": 15,
-        "Break": 15,
-        "Salida": 15,
-        "Horas": 15,
-        "Observaciones": 60,
-        "Tareas Detalladas": 90
+    col_widths_main = {
+        "Lugar": 40,
+        "Fecha": 25,
+        "Entrada": 20,
+        "Break": 20,
+        "Salida": 20,
+        "Horas": 20,
+        "Observaciones": 120 # Más espacio para observaciones
     }
     
-    total_table_width = sum(col_widths.values())
-    left_margin = (pdf.w - total_table_width) / 2 
+    total_table_width_main = sum(col_widths_main.values())
+    left_margin_main = (pdf.w - total_table_width_main) / 2 
     
-    pdf.set_x(left_margin) 
-    for header, width in col_widths.items():
-        pdf.cell(width, 7, header, 1, 0, "C") 
+    pdf.set_x(left_margin_main) 
+    for header, width in col_widths_main.items():
+        pdf.cell(width, 8, header, 1, 0, "C", fill=True) # Fondo para cabeceras
     pdf.ln() 
 
+    # Datos de la tabla principal
     pdf.set_font("Arial", "", 7) 
     total_hours_month = 0.0 
-
-    # Altura de línea base para el texto dentro de las celdas
-    LINE_HEIGHT = 6 
+    LINE_HEIGHT_MAIN_TABLE = 6 # Altura de línea para el contenido de la tabla principal
 
     for service in services_data:
         date_display = service.date.strftime("%d/%m/%Y")
         entry_time_display = service.entry_time.strftime("%H:%M")
         exit_time_display = service.exit_time.strftime("%H:%M")
-
         obs_display = service.observations if service.observations else ""
         
-        detailed_tasks_display = ""
-        if service.subtasks:
-            sorted_subtasks = sorted(service.subtasks, key=lambda x: x.hours, reverse=True)
-            for subtask in sorted_subtasks:
-                detailed_tasks_display += f"{subtask.description} ({subtask.hours:.1f}h)\n"
-            if detailed_tasks_display:
-                detailed_tasks_display = detailed_tasks_display.strip()
-
-        # --- Calcular la altura de la fila ---
-        # Calcular el número de líneas para Observaciones
-        # Usamos pdf.get_string_width para estimar el ancho del texto
-        # y dividimos por el ancho de la columna para obtener las líneas.
-        # Añadimos un pequeño margen de seguridad y nos aseguramos de que sea al menos 1 línea.
-        obs_lines = 1
-        if obs_display:
-            # Estimar el número de caracteres por línea para el ancho de la columna
-            chars_per_line_obs = col_widths["Observaciones"] / pdf.get_string_width('W') # 'W' es un carácter ancho
-            obs_lines = max(1, math.ceil(len(obs_display) / chars_per_line_obs))
-            # Una estimación más precisa sería usar pdf.get_string_width(obs_display)
-            # y dividirlo por col_widths["Observaciones"], pero eso solo funciona si el texto no se envuelve.
-            # Para multi_cell, la estimación por caracteres es más robusta sin dry_run.
-
-        # Calcular el número de líneas para Tareas Detalladas
-        tasks_lines = detailed_tasks_display.count('\n') + 1 if detailed_tasks_display else 1
+        # Calcular altura de la fila para la tabla principal
+        # Solo necesitamos considerar las observaciones para la altura de la fila aquí
+        current_x_for_obs_calc = left_margin_main + sum(col_widths_main[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas"])
+        pdf.set_xy(current_x_for_obs_calc, pdf.get_y())
+        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 0, "L", 0, 0, dry_run=True)
+        obs_cell_height = pdf.get_y() - pdf.get_y() # Esto es 0, necesitamos la altura real
+        # La forma correcta de obtener la altura de multi_cell sin dry_run es:
+        # 1. Guardar Y inicial.
+        # 2. Llamar multi_cell con ln=0.
+        # 3. Calcular la diferencia entre la Y actual y la Y inicial.
+        # 4. Restablecer Y a la inicial.
         
-        # La altura de la fila es la máxima de las líneas de contenido, multiplicada por la altura de línea,
-        # asegurando un mínimo para celdas vacías o con poco contenido.
-        row_height = max(obs_lines, tasks_lines, 1) * LINE_HEIGHT
-        
-        # Asegurarse de que no se salga de la página antes de dibujar la fila
+        # Estimación simple de líneas para multi_cell sin dry_run
+        # get_string_width devuelve el ancho en mm.
+        # dividimos por el ancho de la columna para obtener el número de líneas.
+        text_width = pdf.get_string_width(obs_display)
+        num_lines = math.ceil(text_width / col_widths_main["Observaciones"]) if text_width > 0 else 1
+        row_height = max(num_lines * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE) # Mínimo una línea
+
+        # Asegurarse de que no se salga de la página
         if pdf.get_y() + row_height > pdf.page_break_trigger:
             pdf.add_page()
-            pdf.set_x(left_margin) # Redibujar cabeceras en la nueva página
-            for header, width in col_widths.items():
-                pdf.cell(width, 7, header, 1, 0, "C") 
+            pdf.set_x(left_margin_main) 
+            for header, width in col_widths_main.items():
+                pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
             pdf.ln()
-            pdf.set_font("Arial", "", 7) # Restablecer fuente después de cabeceras
+            pdf.set_font("Arial", "", 7) 
 
-        # --- Dibujar la fila con la altura calculada ---
-        current_x = left_margin
-        current_y = pdf.get_y() # Obtener la Y actual para la fila
-
-        # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
-        pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Lugar"], row_height, service.place, 1, 0, "L", 0)
-        current_x += col_widths["Lugar"]
+        current_x = left_margin_main
+        current_y = pdf.get_y()
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Fecha"], row_height, date_display, 1, 0, "C", 0)
-        current_x += col_widths["Fecha"]
+        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L")
+        current_x += col_widths_main["Lugar"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
-        current_x += col_widths["Entrada"]
+        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C")
+        current_x += col_widths_main["Fecha"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
-        current_x += col_widths["Break"]
+        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C")
+        current_x += col_widths_main["Entrada"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
-        current_x += col_widths["Salida"]
+        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C")
+        current_x += col_widths_main["Break"]
 
         pdf.set_xy(current_x, current_y)
-        pdf.cell(col_widths["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
-        current_x += col_widths["Horas"]
+        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C")
+        current_x += col_widths_main["Salida"]
 
-        # Dibujar Observaciones (multi_cell)
         pdf.set_xy(current_x, current_y)
-        # El último argumento de multi_cell (ln) debe ser 0 para que no avance la Y
-        # y podamos dibujar la siguiente celda en la misma línea "virtual".
-        pdf.multi_cell(col_widths["Observaciones"], LINE_HEIGHT, obs_display, 1, "L", 0, 0) 
-        current_x += col_widths["Observaciones"]
+        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C")
+        current_x += col_widths_main["Horas"]
 
-        # Dibujar Tareas Detalladas (multi_cell)
         pdf.set_xy(current_x, current_y)
-        # El último argumento de multi_cell (ln) debe ser 1 para que avance la Y a la siguiente línea
-        pdf.multi_cell(col_widths["Tareas Detalladas"], LINE_HEIGHT, detailed_tasks_display, 1, "L", 0, 1) 
-
-        # Asegurarse de que la posición Y del PDF esté al final de la fila más alta
-        # FPDF.multi_cell con ln=1 ya debería haber avanzado la Y, pero es bueno verificar.
-        # Si la altura calculada (row_height) es mayor que lo que multi_cell avanzó, forzamos la Y.
-        # Esto es más complejo de manejar con multi_cell en la misma línea,
-        # una alternativa es dibujar todas las celdas con set_xy y luego avanzar Y.
-        # Para simplificar y asegurar, podemos forzar la Y a la altura de la fila.
-        pdf.set_y(current_y + row_height) # Forzamos la Y para la siguiente fila
+        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", 0, 1) # ln=1 para avanzar la Y
 
         total_hours_month += service.worked_hours
 
     pdf.ln(5) 
     pdf.set_font("Arial", "B", 10) 
     pdf.cell(0, 10, f"Total de horas trabajadas en el mes: {total_hours_month:.2f} horas", 0, 1, "R") 
+
+    # --- Página 2 (o siguientes): Tareas Detalladas ---
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(0, 15, "Detalle de Tareas por Servicio", 0, 1, "C")
+    pdf.set_font("Arial", "", 12)
+    pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
+    pdf.ln(10)
+
+    pdf.set_font("Arial", "B", 10)
+    col_widths_subtasks = {
+        "Fecha": 25,
+        "Lugar": 45,
+        "Descripción de Tarea": 150,
+        "Horas": 20
+    }
+    total_table_width_subtasks = sum(col_widths_subtasks.values())
+    left_margin_subtasks = (pdf.w - total_table_width_subtasks) / 2
+
+    pdf.set_x(left_margin_subtasks)
+    for header, width in col_widths_subtasks.items():
+        pdf.cell(width, 8, header, 1, 0, "C", fill=True)
+    pdf.ln()
+
+    pdf.set_font("Arial", "", 8)
+    LINE_HEIGHT_SUBTASK_TABLE = 6
+
+    for service in services_data:
+        if service.subtasks:
+            # Encabezado para cada servicio con sub-tareas
+            pdf.set_font("Arial", "B", 8)
+            pdf.set_x(left_margin_subtasks)
+            pdf.cell(total_table_width_subtasks, 7, f"Servicio: {service.place} - {service.date.strftime('%d/%m/%Y')}", 1, 1, "L", fill=False)
+            pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
+
+            for subtask in service.subtasks:
+                desc_display = subtask.description
+                hours_display = f"{subtask.hours:.1f}"
+
+                # Calcular altura de la fila para sub-tareas
+                text_width_desc = pdf.get_string_width(desc_display)
+                num_lines_desc = math.ceil(text_width_desc / col_widths_subtasks["Descripción de Tarea"]) if text_width_desc > 0 else 1
+                subtask_row_height = max(num_lines_desc * LINE_HEIGHT_SUBTASK_TABLE, LINE_HEIGHT_SUBTASK_TABLE)
+
+                # Asegurarse de que no se salga de la página
+                if pdf.get_y() + subtask_row_height > pdf.page_break_trigger:
+                    pdf.add_page()
+                    pdf.set_font("Arial", "B", 10) # Redibujar cabeceras en la nueva página
+                    pdf.set_x(left_margin_subtasks)
+                    for header, width in col_widths_subtasks.items():
+                        pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
+                    pdf.ln()
+                    pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
+
+                current_x = left_margin_subtasks
+                current_y = pdf.get_y()
+
+                pdf.set_xy(current_x, current_y)
+                pdf.cell(col_widths_subtasks["Fecha"], subtask_row_height, service.date.strftime('%d/%m/%Y'), 1, 0, "C")
+                current_x += col_widths_subtasks["Fecha"]
+
+                pdf.set_xy(current_x, current_y)
+                pdf.cell(col_widths_subtasks["Lugar"], subtask_row_height, service.place, 1, 0, "L")
+                current_x += col_widths_subtasks["Lugar"]
+
+                pdf.set_xy(current_x, current_y)
+                pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 1, "L", 0, 0)
+                current_x += col_widths_subtasks["Descripción de Tarea"]
+
+                pdf.set_xy(current_x, current_y)
+                pdf.cell(col_widths_subtasks["Horas"], subtask_row_height, hours_display, 1, 0, "C")
+                
+                pdf.set_y(current_y + subtask_row_height) # Avanzar Y para la siguiente fila de sub-tarea
+            pdf.ln(5) # Espacio después de cada grupo de sub-tareas
 
     return pdf.output(dest='S').encode('latin-1')
 
@@ -340,8 +388,6 @@ def index():
 
     for service in services:
         service.date_display = service.date.strftime("%d/%m/%Y")
-        # Asegurarse de que las sub-tareas estén cargadas
-        # SQLAlchemy ya las carga con lazy=True si se accede, pero para el PDF es bueno tenerlas
         _ = service.subtasks 
 
     return render_template('index.html', services=services, selected_month_str=selected_month_str)
@@ -358,9 +404,6 @@ def add_service():
         exit_time_str = request.form['exit_time']
         observations = request.form.get('observations', '').strip() 
 
-        # Lógica del checkbox "No descontar break"
-        # El valor del input break_duration_str siempre se guarda en la DB.
-        # La bandera no_discount_break solo afecta el cálculo de worked_hours.
         no_discount_break = 'no_discount_break' in request.form
         
         try:
@@ -368,10 +411,8 @@ def add_service():
             entry_time_obj = datetime.strptime(entry_time_str, '%H:%M').time()
             exit_time_obj = datetime.strptime(exit_time_str, '%H:%M').time()
             
-            # Convertir break_duration a int para guardar en DB
             break_duration_val = int(break_duration_str)
 
-            # Calcular horas trabajadas: si no_discount_break está marcado, el break para el cálculo es 0
             actual_break_for_calculation = 0 if no_discount_break else break_duration_val
             worked_hours = calculate_worked_hours(entry_time_str, exit_time_str, actual_break_for_calculation)
             
@@ -380,20 +421,19 @@ def add_service():
                 place=place,
                 date=date_obj,
                 entry_time=entry_time_obj,
-                break_duration=break_duration_val, # Se guarda el valor real del input
+                break_duration=break_duration_val, 
                 exit_time=exit_time_obj,
                 worked_hours=worked_hours,
                 observations=observations
             )
             db.session.add(new_service)
-            db.session.flush() # Obtener el ID del servicio antes de commitear (para las sub-tareas)
+            db.session.flush() 
 
-            # Manejar las sub-tareas
             subtask_descriptions = request.form.getlist('subtask_description[]')
             subtask_hours = request.form.getlist('subtask_hours[]')
 
             for desc, hours_str in zip(subtask_descriptions, subtask_hours):
-                if desc.strip() and hours_str.strip(): # Solo añadir si ambos campos no están vacíos
+                if desc.strip() and hours_str.strip(): 
                     try:
                         hours_float = float(hours_str)
                         new_subtask = SubTask(
@@ -404,7 +444,6 @@ def add_service():
                         db.session.add(new_subtask)
                     except ValueError:
                         flash(f"Error: Las horas para la tarea '{desc}' no son un número válido y no se guardó.", "warning")
-                        # No abortar, solo ignorar esta sub-tarea mal formada
                         continue
 
             db.session.commit() 
@@ -431,23 +470,19 @@ def edit_service(service_id):
             service.exit_time = datetime.strptime(request.form['exit_time'], '%H:%M').time()
             service.observations = request.form.get('observations', '').strip()
 
-            # Lógica del checkbox "No descontar break"
             no_discount_break = 'no_discount_break' in request.form
             break_duration_val = int(request.form['break_duration'])
-            service.break_duration = break_duration_val # Se guarda el valor real del input
+            service.break_duration = break_duration_val 
 
-            # Calcular horas trabajadas: si no_discount_break está marcado, el break para el cálculo es 0
             actual_break_for_calculation = 0 if no_discount_break else break_duration_val
             service.worked_hours = calculate_worked_hours(
                 service.entry_time.strftime('%H:%M'),
                 service.exit_time.strftime('%H:%M'),
-                actual_break_for_calculation # Usar el break ajustado para el cálculo
+                actual_break_for_calculation 
             )
 
-            # Manejar las sub-tareas: Borrar las existentes y añadir las nuevas
-            # Esta es una estrategia simple. Para grandes volúmenes, se podría optimizar
             SubTask.query.filter_by(service_id=service.id).delete()
-            db.session.flush() # Asegurarse de que las eliminaciones se procesen antes de añadir nuevas
+            db.session.flush() 
 
             subtask_descriptions = request.form.getlist('subtask_description[]')
             subtask_hours = request.form.getlist('subtask_hours[]')
@@ -486,7 +521,6 @@ def edit_service(service_id):
 def delete_service(service_id):
     service = Service.query.filter_by(id=service_id, user_id=session.get('user_id')).first_or_404()
     try:
-        # Debido a cascade="all, delete-orphan" en Service, las SubTask se eliminarán automáticamente
         db.session.delete(service) 
         db.session.commit() 
         flash('Servicio eliminado correctamente.', 'success')
@@ -521,7 +555,6 @@ def download_pdf():
             end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
         end_date = end_date.date()
         
-        # Cargar servicios con sus sub-tareas
         services = Service.query.filter(
             Service.user_id == user_id,
             Service.date >= start_date,
@@ -555,7 +588,6 @@ def preview_pdf():
             end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
         end_date = end_date.date()
         
-        # Cargar servicios con sus sub-tareas
         services = Service.query.filter(
             Service.user_id == user_id,
             Service.date >= start_date,
