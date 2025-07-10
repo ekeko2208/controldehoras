@@ -4,7 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 from datetime import datetime, timedelta
-from fpdf import FPDF
+# Cambiado de fpdf a fpdf2
+from fpdf2 import FPDF 
 import io
 import math
 from functools import wraps
@@ -132,13 +133,20 @@ def calculate_worked_hours(entry_time_str, exit_time_str, break_duration_min, di
     except ValueError:
         return 0.0 
 
-# Función para generar el informe PDF (COMPLETAMENTE REFACTORIZADA)
+# Función para generar el informe PDF (COMPLETAMENTE REFACTORIZADA para fpdf2 y diseño)
 def generate_pdf_report(user_id, services_data, selected_month_str):
     pdf = FPDF(unit="mm", format="A4", orientation='L') 
     
-    # --- Página 1: Resumen de Servicios ---
-    pdf.add_page() 
+    # --- Configuración global para el PDF ---
     pdf.set_auto_page_break(auto=True, margin=15) 
+    pdf.set_font("Arial", "", 10) # Fuente por defecto
+    
+    # Colores
+    COLOR_HEADER_BG = (52, 73, 94)  # Azul oscuro (similar al navbar)
+    COLOR_HEADER_TEXT = (255, 255, 255) # Blanco
+    COLOR_PRIMARY_TEXT = (50, 50, 50) # Gris oscuro para texto general
+    COLOR_ACCENT = (52, 152, 219) # Azul vibrante
+    COLOR_LIGHT_GRAY = (240, 240, 240) # Gris claro para fondo de filas alternas
 
     month_num = int(selected_month_str.split('-')[1])
     year_num = selected_month_str.split('-')[0]
@@ -148,15 +156,21 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     ]
     month_name_spanish = spanish_month_names_local[month_num - 1].capitalize()
 
+    # --- Página 1: Resumen de Servicios ---
+    pdf.add_page() 
+
     # Título principal
-    pdf.set_font("Arial", "B", 18)
+    pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+    pdf.set_font("Arial", "B", 20)
     pdf.cell(0, 15, f"Reporte de Horas Trabajadas", 0, 1, "C") 
-    pdf.set_font("Arial", "", 12)
+    pdf.set_font("Arial", "", 14)
     pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
     pdf.ln(10) 
 
     # Cabeceras de la tabla principal
-    pdf.set_font("Arial", "B", 8) 
+    pdf.set_fill_color(*COLOR_HEADER_BG)
+    pdf.set_text_color(*COLOR_HEADER_TEXT)
+    pdf.set_font("Arial", "B", 9) 
     col_widths_main = {
         "Lugar": 40,
         "Fecha": 25,
@@ -172,161 +186,189 @@ def generate_pdf_report(user_id, services_data, selected_month_str):
     
     pdf.set_x(left_margin_main) 
     for header, width in col_widths_main.items():
-        pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
+        pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
     pdf.ln() 
 
     # Datos de la tabla principal
-    pdf.set_font("Arial", "", 7) 
+    pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+    pdf.set_font("Arial", "", 8) 
     total_hours_month = 0.0 
     LINE_HEIGHT_MAIN_TABLE = 6 
 
-    for service in services_data:
+    for i, service in enumerate(services_data):
         date_display = service.date.strftime("%d/%m/%Y")
         entry_time_display = service.entry_time.strftime("%H:%M")
         exit_time_display = service.exit_time.strftime("%H:%M")
         obs_display = service.observations if service.observations else ""
         
-        # --- Calcular altura de la fila para la tabla principal ---
-        # Usamos get_string_width para estimar el ancho del texto y calcular las líneas
-        num_lines_obs = 1
-        if obs_display:
-            # Calcular el número de líneas que el texto ocuparía en la columna de Observaciones
-            # Multiplicamos por 0.9 para un margen de seguridad, ya que get_string_width no considera el wrapping
-            text_width_obs = pdf.get_string_width(obs_display)
-            num_lines_obs = max(1, math.ceil(text_width_obs / (col_widths_main["Observaciones"] * 0.9))) 
-        
-        row_height = max(num_lines_obs * LINE_HEIGHT_MAIN_TABLE, LINE_HEIGHT_MAIN_TABLE + 2) # Añadir un pequeño padding
+        # --- Calcular altura de la fila para la tabla principal usando dry_run ---
+        # Guardar la Y actual antes de la simulación
+        initial_y = pdf.get_y()
+        # Simular multi_cell para Observaciones para obtener la altura
+        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 0, "L", 0, 0, pdf.get_x() + left_margin_main + sum(col_widths_main[h] for h in ["Lugar", "Fecha", "Entrada", "Break", "Salida", "Horas"]), initial_y, dry_run=True)
+        obs_height = pdf.get_y() - initial_y
+        pdf.set_y(initial_y) # Restablecer Y después de la simulación
+
+        row_height = max(obs_height, LINE_HEIGHT_MAIN_TABLE + 2) # Mínimo una línea con padding
 
         # Asegurarse de que no se salga de la página antes de dibujar la fila
         if pdf.get_y() + row_height > pdf.page_break_trigger:
             pdf.add_page()
+            # Redibujar cabeceras en la nueva página
+            pdf.set_fill_color(*COLOR_HEADER_BG)
+            pdf.set_text_color(*COLOR_HEADER_TEXT)
+            pdf.set_font("Arial", "B", 9) 
             pdf.set_x(left_margin_main) 
             for header, width in col_widths_main.items():
-                pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
+                pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
             pdf.ln()
-            pdf.set_font("Arial", "", 7) 
+            pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+            pdf.set_font("Arial", "", 8) 
+
+        # Establecer color de fondo alterno para las filas
+        if i % 2 == 0:
+            pdf.set_fill_color(255, 255, 255) # Blanco
+        else:
+            pdf.set_fill_color(*COLOR_LIGHT_GRAY) # Gris claro
 
         start_y_for_row = pdf.get_y() # Guardar la Y inicial para esta fila
         current_x = left_margin_main
 
-        # Dibujar celdas de una sola línea (o que no necesitan envolver texto)
+        # Dibujar celdas de una sola línea
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", 0)
+        pdf.cell(col_widths_main["Lugar"], row_height, service.place, 1, 0, "L", fill=True)
         current_x += col_widths_main["Lugar"]
 
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C", 0)
+        pdf.cell(col_widths_main["Fecha"], row_height, date_display, 1, 0, "C", fill=True)
         current_x += col_widths_main["Fecha"]
 
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C", 0)
+        pdf.cell(col_widths_main["Entrada"], row_height, entry_time_display, 1, 0, "C", fill=True)
         current_x += col_widths_main["Entrada"]
 
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C", 0)
+        pdf.cell(col_widths_main["Break"], row_height, str(service.break_duration), 1, 0, "C", fill=True)
         current_x += col_widths_main["Break"]
 
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C", 0)
+        pdf.cell(col_widths_main["Salida"], row_height, exit_time_display, 1, 0, "C", fill=True)
         current_x += col_widths_main["Salida"]
 
         pdf.set_xy(current_x, start_y_for_row)
-        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", 0)
+        pdf.cell(col_widths_main["Horas"], row_height, f"{service.worked_hours:.2f}", 1, 0, "C", fill=True)
         current_x += col_widths_main["Horas"]
 
         # Dibujar Observaciones (multi_cell)
         pdf.set_xy(current_x, start_y_for_row)
-        # multi_cell con ln=1 para que el cursor Y avance a la siguiente línea después de dibujar la celda
-        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", 0, 1) 
+        pdf.multi_cell(col_widths_main["Observaciones"], LINE_HEIGHT_MAIN_TABLE, obs_display, 1, "L", fill=True, ln=1) 
         
-        # Después de la multi_cell, la Y ya está en la posición correcta para la siguiente fila.
-        # Aseguramos que la próxima fila comience exactamente en row_height de distancia.
-        # Esto es crucial si el multi_cell no ocupa exactamente row_height.
+        # Aseguramos que la próxima fila comience en la posición correcta
         pdf.set_y(start_y_for_row + row_height)
-
 
         total_hours_month += service.worked_hours
 
     pdf.ln(5) 
-    pdf.set_font("Arial", "B", 10) 
+    pdf.set_font("Arial", "B", 12) 
+    pdf.set_text_color(*COLOR_ACCENT)
     pdf.cell(0, 10, f"Total de horas trabajadas en el mes: {total_hours_month:.2f} horas", 0, 1, "R") 
 
     # --- Página 2 (o siguientes): Tareas Detalladas ---
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 18)
-    pdf.cell(0, 15, "Detalle de Tareas por Servicio", 0, 1, "C")
-    pdf.set_font("Arial", "", 12)
-    pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
-    pdf.ln(10)
+    # Solo añadir esta página si hay servicios con subtareas
+    has_subtasks = any(service.subtasks for service in services_data)
+    if has_subtasks:
+        pdf.add_page()
+        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+        pdf.set_font("Arial", "B", 20)
+        pdf.cell(0, 15, "Detalle de Tareas por Servicio", 0, 1, "C")
+        pdf.set_font("Arial", "", 14)
+        pdf.cell(0, 10, f"Mes: {month_name_spanish} {year_num}", 0, 1, "C")
+        pdf.ln(10)
 
-    pdf.set_font("Arial", "B", 10)
-    col_widths_subtasks = {
-        "Fecha": 25,
-        "Lugar": 45,
-        "Descripción de Tarea": 150,
-        "Horas": 20
-    }
-    total_table_width_subtasks = sum(col_widths_subtasks.values())
-    left_margin_subtasks = (pdf.w - total_table_width_subtasks) / 2
+        # Cabeceras de la tabla de subtareas
+        pdf.set_fill_color(*COLOR_HEADER_BG)
+        pdf.set_text_color(*COLOR_HEADER_TEXT)
+        pdf.set_font("Arial", "B", 9)
+        col_widths_subtasks = {
+            "Fecha": 25,
+            "Lugar": 45,
+            "Descripción de Tarea": 150,
+            "Horas": 20
+        }
+        total_table_width_subtasks = sum(col_widths_subtasks.values())
+        left_margin_subtasks = (pdf.w - total_table_width_subtasks) / 2
 
-    pdf.set_x(left_margin_subtasks)
-    for header, width in col_widths_subtasks.items():
-        pdf.cell(width, 8, header, 1, 0, "C", fill=True)
-    pdf.ln()
+        pdf.set_x(left_margin_subtasks)
+        for header, width in col_widths_subtasks.items():
+            pdf.cell(width, 10, header, 1, 0, "C", fill=True)
+        pdf.ln()
 
-    pdf.set_font("Arial", "", 8)
-    LINE_HEIGHT_SUBTASK_TABLE = 6
+        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+        pdf.set_font("Arial", "", 8)
+        LINE_HEIGHT_SUBTASK_TABLE = 6
 
-    for service in services_data:
-        if service.subtasks:
-            # Encabezado para cada servicio con sub-tareas
-            pdf.set_font("Arial", "B", 8)
-            pdf.set_x(left_margin_subtasks)
-            pdf.cell(total_table_width_subtasks, 7, f"Servicio: {service.place} - {service.date.strftime('%d/%m/%Y')}", 1, 1, "L", fill=False)
-            pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
+        for i, service in enumerate(services_data):
+            if service.subtasks:
+                # Encabezado para cada servicio con sub-tareas
+                pdf.set_font("Arial", "B", 9)
+                pdf.set_text_color(*COLOR_ACCENT)
+                pdf.set_x(left_margin_subtasks)
+                pdf.cell(total_table_width_subtasks, 8, f"Servicio: {service.place} - {service.date.strftime('%d/%m/%Y')}", 1, 1, "L", fill=False)
+                pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+                pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
 
-            for subtask in service.subtasks:
-                desc_display = subtask.description
-                hours_display = f"{subtask.hours:.1f}"
+                for j, subtask in enumerate(service.subtasks):
+                    desc_display = subtask.description
+                    hours_display = f"{subtask.hours:.1f}"
 
-                # Calcular altura de la fila para sub-tareas
-                text_width_desc = pdf.get_string_width(desc_display)
-                num_lines_desc = math.ceil(text_width_desc / col_widths_subtasks["Descripción de Tarea"]) if text_width_desc > 0 else 1
-                subtask_row_height = max(num_lines_desc * LINE_HEIGHT_SUBTASK_TABLE, LINE_HEIGHT_SUBTASK_TABLE + 2) # Añadir padding
+                    # Calcular altura de la fila para sub-tareas
+                    initial_y = pdf.get_y()
+                    pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 0, "L", 0, 0, pdf.get_x() + left_margin_subtasks + col_widths_subtasks["Fecha"] + col_widths_subtasks["Lugar"], initial_y, dry_run=True)
+                    desc_height = pdf.get_y() - initial_y
+                    pdf.set_y(initial_y) # Restablecer Y
 
-                # Asegurarse de que no se salga de la página
-                if pdf.get_y() + subtask_row_height > pdf.page_break_trigger:
-                    pdf.add_page()
-                    pdf.set_font("Arial", "B", 10) # Redibujar cabeceras en la nueva página
-                    pdf.set_x(left_margin_subtasks)
-                    for header, width in col_widths_subtasks.items():
-                        pdf.cell(width, 8, header, 1, 0, "C", fill=True) 
-                    pdf.ln()
-                    pdf.set_font("Arial", "", 8) # Restablecer fuente para datos
+                    subtask_row_height = max(desc_height, LINE_HEIGHT_SUBTASK_TABLE + 2) # Añadir padding
 
-                current_x = left_margin_subtasks
-                current_y = pdf.get_y()
+                    # Asegurarse de que no se salga de la página
+                    if pdf.get_y() + subtask_row_height > pdf.page_break_trigger:
+                        pdf.add_page()
+                        # Redibujar cabeceras en la nueva página
+                        pdf.set_fill_color(*COLOR_HEADER_BG)
+                        pdf.set_text_color(*COLOR_HEADER_TEXT)
+                        pdf.set_font("Arial", "B", 9) 
+                        pdf.set_x(left_margin_subtasks)
+                        for header, width in col_widths_subtasks.items():
+                            pdf.cell(width, 10, header, 1, 0, "C", fill=True) 
+                        pdf.ln()
+                        pdf.set_text_color(*COLOR_PRIMARY_TEXT)
+                        pdf.set_font("Arial", "", 8) 
+                    
+                    # Establecer color de fondo alterno para las filas de subtareas
+                    if j % 2 == 0:
+                        pdf.set_fill_color(255, 255, 255) # Blanco
+                    else:
+                        pdf.set_fill_color(*COLOR_LIGHT_GRAY) # Gris claro
 
-                pdf.set_xy(current_x, current_y)
-                pdf.cell(col_widths_subtasks["Fecha"], subtask_row_height, service.date.strftime('%d/%m/%Y'), 1, 0, "C")
-                current_x += col_widths_subtasks["Fecha"]
+                    current_x = left_margin_subtasks
+                    current_y = pdf.get_y()
 
-                pdf.set_xy(current_x, current_y)
-                pdf.cell(col_widths_subtasks["Lugar"], subtask_row_height, service.place, 1, 0, "L")
-                current_x += col_widths_subtasks["Lugar"]
+                    pdf.set_xy(current_x, current_y)
+                    pdf.cell(col_widths_subtasks["Fecha"], subtask_row_height, service.date.strftime('%d/%m/%Y'), 1, 0, "C", fill=True)
+                    current_x += col_widths_subtasks["Fecha"]
 
-                pdf.set_xy(current_x, current_y)
-                # multi_cell con ln=0 para que el cursor X no se reinicie
-                pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 1, "L", 0, 0)
-                current_x += col_widths_subtasks["Descripción de Tarea"]
+                    pdf.set_xy(current_x, current_y)
+                    pdf.cell(col_widths_subtasks["Lugar"], subtask_row_height, service.place, 1, 0, "L", fill=True)
+                    current_x += col_widths_subtasks["Lugar"]
 
-                pdf.set_xy(current_x, current_y)
-                # cell con ln=1 para que el cursor Y avance a la siguiente línea después de esta fila
-                pdf.cell(col_widths_subtasks["Horas"], subtask_row_height, hours_display, 1, 0, "C")
-                
-                # Forzar el avance de la posición Y del PDF para la siguiente fila, basándose en la altura real de la fila actual
-                pdf.set_y(current_y + subtask_row_height) 
-            pdf.ln(5) # Espacio después de cada grupo de sub-tareas
+                    pdf.set_xy(current_x, current_y)
+                    pdf.multi_cell(col_widths_subtasks["Descripción de Tarea"], LINE_HEIGHT_SUBTASK_TABLE, desc_display, 1, "L", fill=True, ln=0)
+                    current_x += col_widths_subtasks["Descripción de Tarea"]
+
+                    pdf.set_xy(current_x, current_y)
+                    pdf.cell(col_widths_subtasks["Horas"], subtask_row_height, hours_display, 1, 0, "C", fill=True)
+                    
+                    pdf.set_y(current_y + subtask_row_height) 
+                pdf.ln(5) # Espacio después de cada grupo de sub-tareas
 
     return pdf.output(dest='S').encode('latin-1')
 
