@@ -251,7 +251,7 @@
                         <hr class="my-4">
                         <form action="{{ url_for('index') }}" method="GET" class="row g-3 align-items-end">
                             <div class="col-md-8">
-                                <label for="search_query" class="form-label">Buscar por Descripción:</label>
+                                <label for="search_query" class="form-label">Buscar por Descripción/Lugar:</label>
                                 <input type="text" id="search_query" name="search" class="form-control" placeholder="Escribe para buscar..." value="{{ search_query if search_query else '' }}">
                             </div>
                             <div class="col-md-4 d-flex justify-content-end">
@@ -277,7 +277,8 @@
                             <a href="{{ url_for('export_csv') }}" class="btn btn-success">
                                 <i class="fas fa-file-csv me-2"></i> Exportar CSV
                             </a>
-                            <a href="{{ url_for('generate_pdf') }}" class="btn btn-danger"> {# Usar btn-danger para PDF para diferenciar #}
+                            {# CAMBIO AQUÍ: Usar download_pdf en lugar de generate_pdf #}
+                            <a href="{{ url_for('download_pdf') }}" class="btn btn-danger"> 
                                 <i class="fas fa-file-pdf me-2"></i> Generar PDF
                             </a>
                         </div>
