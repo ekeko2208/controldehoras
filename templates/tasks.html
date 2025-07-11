@@ -237,7 +237,7 @@
                         <i class="fas fa-filter me-2"></i> Filtrar Resumen de Tareas
                     </div>
                     <div class="card-body">
-                        <form action="{{ url_for('tasks_summary') }}" method="POST" class="row g-3 align-items-end">
+                        <form action="{{ url_for('load_tasks_month') }}" method="POST" class="row g-3 align-items-end"> {# CAMBIO AQUÍ: load_tasks_month #}
                             <div class="col-md-6">
                                 <label for="selected_month" class="form-label">Seleccionar Mes:</label>
                                 <input type="month" id="selected_month" name="selected_month" class="form-control" value="{{ current_month }}" required>
@@ -259,7 +259,7 @@
                     <div class="card-header">
                         <i class="fas fa-chart-bar me-2"></i> Resumen de Horas por Tarea/Lugar ({{ spanish_month_names[current_month.split('-')[1]|int - 1]|capitalize }} {{ current_month.split('-')[0] }})
                         <div class="action-buttons">
-                            {# Botón para generar PDF de Tareas (se implementará en app.py más adelante) #}
+                            {# Botón para generar PDF de Tareas #}
                             <a href="{{ url_for('generate_tasks_pdf') }}" class="btn btn-danger">
                                 <i class="fas fa-file-pdf me-2"></i> Generar PDF de Tareas
                             </a>
