@@ -4,255 +4,189 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Añadir Servicio - Control de Horas</title>
-    {# Favicon: Un reloj de arena como icono para la pestaña del navegador #}
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏳</text></svg>" />
-    
-    {# Enlace a Bootstrap CSS #}
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    {# Enlace a Google Fonts (Poppins para un aspecto moderno y agradable) #}
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    {# Enlace a Font Awesome para iconos #}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" xintegrity="sha512-Fo3rlrZj/k7ujTnHg4CGR2D7kSs0V4LLanw2qksYuRlEzO+tcaEPQogQ0KaoGN26/zrn20ImR1DfuLWnOo7aBA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
-            font-family: 'Poppins', sans-serif; /* Aplicar la nueva fuente */
-            background-color: #e9ecef; /* Un gris claro suave para el fondo */
-            color: #343a40; /* Color de texto oscuro */
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
         }
-        .navbar {
-            background-color: #2c3e50; /* Azul oscuro elegante para la barra de navegación */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        .container {
+            max-width: 800px;
         }
-        .navbar-brand, .nav-link {
-            color: #ecf0f1 !important; /* Texto blanco para la barra de navegación */
+        .form-group label {
             font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+            display: block;
         }
-        .navbar-nav .nav-link.active {
-            color: #3498db !important; /* Azul vibrante para el enlace activo */
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
         }
-        .container-fluid {
-            padding-top: 20px;
-            padding-bottom: 20px;
-        }
-        .card {
-            border-radius: 15px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.15); /* Sombra más pronunciada */
-            margin-bottom: 30px;
-            background-color: #ffffff;
-            border: none; /* Eliminar borde predeterminado de la tarjeta */
-        }
-        .card-header {
-            background-color: #3498db; /* Azul vibrante para encabezados de tarjeta */
-            color: white;
-            font-weight: 600;
-            border-top-left-radius: 15px;
-            border-top-right-radius: 15px;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .form-control:focus {
+            border-color: #4CAF50;
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(76, 175, 80, 0.25);
         }
         .btn-primary {
-            background-color: #28a745; /* Verde para acciones principales */
-            border-color: #28a745;
-            border-radius: 8px;
-            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
             font-weight: 600;
-            transition: background-color 0.3s ease, transform 0.2s ease;
+            transition: background-color 0.2s ease-in-out;
         }
         .btn-primary:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-        }
-        .btn-info {
-            background-color: #17a2b8; /* Azul claro para info/secundario */
-            border-color: #17a2b8;
-            border-radius: 8px;
-            padding: 8px 15px;
-            font-weight: 500;
-        }
-        .btn-info:hover {
-            background-color: #138496;
-        }
-        .btn-danger {
-            background-color: #dc3545; /* Rojo para eliminar */
-            border-color: #dc3545;
-            border-radius: 8px;
-            padding: 8px 15px;
-            font-weight: 500;
-        }
-        .btn-danger:hover {
-            background-color: #c82333;
+            background-color: #45a049;
         }
         .btn-secondary {
-            background-color: #6c757d; /* Gris para acciones secundarias */
-            border-color: #6c757d;
-            border-radius: 8px;
-            padding: 8px 15px;
-            font-weight: 500;
+            background-color: #6c757d;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease-in-out;
         }
         .btn-secondary:hover {
             background-color: #5a6268;
         }
-        .form-control {
-            border-radius: 8px;
-            border: 1px solid #ced4da;
-            padding: 10px 15px;
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.75rem;
+            background-color: #f9fafb;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
         }
-        .form-control:focus {
-            border-color: #80bdff;
-            box-shadow: 0 0 0 0.25rem rgba(0, 123, 255, 0.25);
+        .task-item input {
+            flex-grow: 1;
         }
-        .input-group-text {
-            border-radius: 8px 0 0 8px;
-            background-color: #e9ecef;
+        .task-item button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .task-item button:hover {
+            background-color: #c82333;
         }
     </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="fas fa-clock me-2"></i>Control de Horas
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('index') }}">
-                            <i class="fas fa-list-alt me-1"></i> Servicios
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('tasks_summary') }}">
-                            <i class="fas fa-tasks me-1"></i> Tareas Específicas
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('profile') }}">
-                            <i class="fas fa-user-circle me-1"></i> Perfil
-                        </a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-user me-1"></i> {{ current_username }}
-                        </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('profile') }}">Gestionar Perfil</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar Sesión</a></li>
-                        </ul>
-                    </li>
-                </ul>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center py-8">
+    <nav class="w-full bg-white shadow-md py-4 mb-8">
+        <div class="container mx-auto flex justify-between items-center px-4">
+            <a href="{{ url_for('index') }}" class="text-2xl font-bold text-gray-800">Control de Horas</a>
+            <div class="flex items-center space-x-4">
+                <span class="text-gray-700">Hola, {{ current_username }}!</span>
+                <a href="{{ url_for('index') }}" class="text-gray-700 hover:text-green-600">Servicios</a>
+                <a href="{{ url_for('tasks_summary') }}" class="text-gray-700 hover:text-green-600">Tareas</a>
+                <a href="{{ url_for('profile') }}" class="text-gray-700 hover:text-green-600">Perfil</a>
+                <a href="{{ url_for('logout') }}" class="text-red-500 hover:text-red-700">Cerrar Sesión</a>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid py-4">
-        {# Mensajes Flash #}
+    <div class="container bg-white p-8 rounded-lg shadow-lg">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-8">Añadir Nuevo Servicio</h1>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="alert-container mb-4">
+                <div class="mb-4">
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message | safe }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <div class="p-3 rounded-lg {% if category == 'success' %}bg-green-100 text-green-700{% elif category == 'danger' %}bg-red-100 text-red-700{% elif category == 'warning' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                            {{ message }}
                         </div>
                     {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
 
-        <div class="row justify-content-center">
-            <div class="col-md-8 col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-plus-circle me-2"></i> Añadir Nuevo Servicio
-                    </div>
-                    <div class="card-body">
-                        <form action="{{ url_for('add_service') }}" method="POST">
-                            <div class="mb-3">
-                                <label for="place" class="form-label">Lugar del Servicio:</label>
-                                <input type="text" class="form-control" id="place" name="place" required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="date" class="form-label">Fecha:</label>
-                                <input type="date" class="form-control" id="date" name="date" value="{{ today_date }}" required>
-                            </div>
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="entry_time" class="form-label">Hora de Entrada:</label>
-                                    <input type="time" class="form-control" id="entry_time" name="entry_time" required>
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="break_duration" class="form-label">Duración Break (minutos):</label>
-                                    <input type="number" class="form-control" id="break_duration" name="break_duration" value="0" required min="0" data-previous-value="0">
-                                </div>
-                                <div class="col-md-4 mb-3">
-                                    <label for="exit_time" class="form-label">Hora de Salida:</label>
-                                    <input type="time" class="form-control" id="exit_time" name="exit_time" required>
-                                </div>
-                            </div>
-                            <div class="mb-3 form-check">
-                                <input type="checkbox" class="form-check-input" id="no_discount_break" name="no_discount_break">
-                                <label class="form-check-label" for="no_discount_break">No descontar break (marcar para no descontar el break de las horas trabajadas)</label>
-                            </div>
-                            <div class="mb-3">
-                                <label for="observations" class="form-label">Observaciones:</label>
-                                <textarea class="form-control" id="observations" name="observations" rows="3"></textarea>
-                            </div>
-                            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                                <button type="submit" class="btn btn-primary me-md-2">
-                                    <i class="fas fa-save me-2"></i> Añadir Servicio
-                                </button>
-                                <a href="{{ url_for('index') }}" class="btn btn-secondary">
-                                    <i class="fas fa-times-circle me-2"></i> Cancelar
-                                </a>
-                            </div>
-                        </form>
-                    </div>
+        <form method="POST" action="{{ url_for('add_service') }}" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label for="date">Fecha:</label>
+                    <input type="date" id="date" name="date" class="form-control" value="{{ default_date }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="place">Lugar:</label>
+                    <input type="text" id="place" name="place" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="entry_time">Hora de Entrada:</label>
+                    <input type="time" id="entry_time" name="entry_time" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label for="break_duration">Duración del Descanso (minutos):</label>
+                    <input type="number" id="break_duration" name="break_duration" class="form-control" value="0" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="exit_time">Hora de Salida:</label>
+                    <input type="time" id="exit_time" name="exit_time" class="form-control" required>
                 </div>
             </div>
-        </div>
+
+            <div class="form-group">
+                <label for="observations">Observaciones:</label>
+                <textarea id="observations" name="observations" rows="3" class="form-control"></textarea>
+            </div>
+
+            <!-- Sección de Tareas Específicas -->
+            <div class="mt-8">
+                <h2 class="text-xl font-bold text-gray-700 mb-4">Tareas Específicas</h2>
+                <div id="specific-tasks-container" class="space-y-4">
+                    <!-- Las tareas se añadirán aquí dinámicamente -->
+                </div>
+                <button type="button" id="add-task-btn" class="btn-primary mt-4 flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i> Añadir Tarea
+                </button>
+            </div>
+            
+            <div class="flex justify-between items-center mt-8">
+                <button type="submit" class="btn-primary">Añadir Servicio</button>
+                <a href="{{ url_for('index') }}" class="btn-secondary">Cancelar</a>
+            </div>
+        </form>
     </div>
 
-    {# Scripts de Bootstrap #}
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
-        // Script para manejar el checkbox de "No descontar break" en el formulario de añadir servicio
         document.addEventListener('DOMContentLoaded', function() {
-            const breakDurationInput = document.getElementById('break_duration');
-            const noDiscountBreakCheckbox = document.getElementById('no_discount_break');
+            const addTaskBtn = document.getElementById('add-task-btn');
+            const tasksContainer = document.getElementById('specific-tasks-container');
 
-            function updateBreakInputState() {
-                if (noDiscountBreakCheckbox.checked) {
-                    // Si el checkbox está marcado:
-                    // 1. Guardar el valor actual del input antes de cambiarlo a 0
-                    breakDurationInput.dataset.previousValue = breakDurationInput.value;
-                    // 2. Establecer el valor a 0
-                    breakDurationInput.value = '0';
-                    // 3. Hacer el input de break de solo lectura
-                    breakDurationInput.readOnly = true;
-                } else {
-                    // Si el checkbox está desmarcado:
-                    // 1. Restaurar el valor anterior si existe, de lo contrario, dejarlo vacío o en 0
-                    breakDurationInput.value = breakDurationInput.dataset.previousValue || '';
-                    // 2. Hacer el input de break editable de nuevo
-                    breakDurationInput.readOnly = false;
-                }
+            let taskCount = 0; // To keep track of unique IDs if needed, though array naming handles it
+
+            function addTaskField(description = '', duration = '') {
+                const taskItem = document.createElement('div');
+                taskItem.classList.add('task-item');
+                taskItem.innerHTML = `
+                    <input type="text" name="specific_task_description[]" class="form-control" placeholder="Descripción de la tarea" value="${description}" required>
+                    <input type="number" name="specific_task_duration[]" class="form-control w-24" placeholder="Horas" step="0.01" min="0" value="${duration}" required>
+                    <button type="button" class="remove-task-btn"><i class="fas fa-trash-alt"></i></button>
+                `;
+                tasksContainer.appendChild(taskItem);
+
+                // Add event listener for the new remove button
+                taskItem.querySelector('.remove-task-btn').addEventListener('click', function() {
+                    tasksContainer.removeChild(taskItem);
+                });
             }
 
-            // Añadir el event listener para cuando el checkbox cambie
-            noDiscountBreakCheckbox.addEventListener('change', updateBreakInputState);
-            
-            // Inicializar el estado del input de break al cargar la página
-            // Por defecto, el checkbox estará desmarcado y el input editable
-            updateBreakInputState(); 
+            addTaskBtn.addEventListener('click', function() {
+                addTaskField();
+            });
+
+            // Initial task field for convenience
+            addTaskField();
         });
     </script>
 </body>
