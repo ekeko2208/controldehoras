@@ -19,7 +19,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch # Para ReportLab TableStyle
-
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT # <-- IMPORTACIÓN CORREGIDA AQUÍ
 
 # --- Configuración de la aplicación Flask ---
 app = Flask(__name__)
@@ -411,7 +411,7 @@ def profile():
             elif len(new_password) < 6:
                 flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
             elif new_password != confirm_new_password:
-                flash('La nueva contraseña y la confirmación no coinciden.', 'danger')
+                flash('Las contraseñas no coinciden.', 'danger')
             else:
                 current_user.set_password(new_password)
                 flash('Contraseña actualizada!', 'success')
@@ -462,7 +462,7 @@ def reset_password(token):
 
     if request.method == 'POST':
         new_password = request.form['new_password']
-        confirm_new_password = request.form['confirm_new_password']
+        confirm_new_password = request.form['confirm_password']
         
         if not new_password or len(new_password) < 6:
             flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
@@ -540,8 +540,9 @@ def download_pdf():
     styles = getSampleStyleSheet()
     
     # Custom style for table cells to handle long text
-    styles.add(ParagraphStyle(name='TableContent', fontSize=7, leading=9, alignment=colors.TA_CENTER))
-    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=7, leading=9, alignment=colors.TA_LEFT))
+    # Corrected: Use TA_CENTER, TA_LEFT from reportlab.lib.enums
+    styles.add(ParagraphStyle(name='TableContentCenter', fontSize=7, leading=9, alignment=TA_CENTER))
+    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=7, leading=9, alignment=TA_LEFT))
 
     story = []
 
@@ -566,12 +567,12 @@ def download_pdf():
         obs_paragraph = Paragraph(service.observations if service.observations else '', styles['TableContentLeft'])
 
         data.append([
-            Paragraph(service.date.strftime('%d/%m/%Y'), styles['TableContent']),
+            Paragraph(service.date.strftime('%d/%m/%Y'), styles['TableContentCenter']), # Use TableContentCenter
             Paragraph(service.place, styles['TableContentLeft']),
-            Paragraph(service.entry_time.strftime('%H:%M'), styles['TableContent']),
-            Paragraph(str(service.break_duration), styles['TableContent']),
-            Paragraph(service.exit_time.strftime('%H:%M'), styles['TableContent']),
-            Paragraph(f"{service.worked_hours:.2f}", styles['TableContent']),
+            Paragraph(service.entry_time.strftime('%H:%M'), styles['TableContentCenter']), # Use TableContentCenter
+            Paragraph(str(service.break_duration), styles['TableContentCenter']), # Use TableContentCenter
+            Paragraph(service.exit_time.strftime('%H:%M'), styles['TableContentCenter']), # Use TableContentCenter
+            Paragraph(f"{service.worked_hours:.2f}", styles['TableContentCenter']), # Use TableContentCenter
             obs_paragraph # Use the Paragraph object
         ])
 
@@ -605,10 +606,11 @@ def download_pdf():
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTSIZE', (0,0), (-1,-1), 7), # Smaller font for table content
-        ('ALIGN', (0,0), (0,-1), 'CENTER'), # Fecha
-        ('ALIGN', (2,0), (5,-1), 'CENTER'), # Entrada, Descanso, Salida, Horas
-        ('ALIGN', (1,0), (1,-1), 'LEFT'), # Lugar
-        ('ALIGN', (6,0), (6,-1), 'LEFT'), # Observaciones
+        # Specific column alignments for data rows
+        ('ALIGN', (0,1), (0,-1), 'CENTER'), # Fecha data
+        ('ALIGN', (1,1), (1,-1), 'LEFT'),   # Lugar data
+        ('ALIGN', (2,1), (5,-1), 'CENTER'), # Entrada, Descanso, Salida, Horas data
+        ('ALIGN', (6,1), (6,-1), 'LEFT'),   # Observaciones data
     ]))
     story.append(table)
     story.append(Spacer(1, 0.2 * inch))
@@ -698,6 +700,11 @@ def generate_tasks_pdf():
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=portrait(A4)) # Portrait A4 for tasks summary
     styles = getSampleStyleSheet()
+    
+    # Custom style for table cells to handle long text
+    styles.add(ParagraphStyle(name='TableContentCenter', fontSize=10, leading=12, alignment=TA_CENTER))
+    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=10, leading=12, alignment=TA_LEFT))
+
     story = []
 
     # Title
@@ -716,7 +723,10 @@ def generate_tasks_pdf():
     # Table Data
     data = [['Tarea Específica', 'Total Horas']]
     for task, total_hours in tasks_summary_data.items():
-        data.append([task, f"{total_hours:.2f}"])
+        data.append([
+            Paragraph(task, styles['TableContentLeft']), # Use Paragraph for task description
+            Paragraph(f"{total_hours:.2f}", styles['TableContentCenter']) # Use Paragraph for total hours
+        ])
 
     if not tasks_summary_data:
         story.append(Paragraph("No hay datos de tareas específicas para este mes.", styles['Normal']))
@@ -732,7 +742,7 @@ def generate_tasks_pdf():
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')), # Header background
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (-1, 0), 'CENTER'), # Header alignment
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
             ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')), # Even rows background
@@ -740,6 +750,8 @@ def generate_tasks_pdf():
             ('BOX', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('FONTSIZE', (0,0), (-1,-1), 10), # Font size for table content
+            ('ALIGN', (0,1), (0,-1), 'LEFT'), # Tarea Específica data (left align)
+            ('ALIGN', (1,1), (1,-1), 'CENTER'), # Total Horas data (center align)
         ]))
         story.append(table)
     
