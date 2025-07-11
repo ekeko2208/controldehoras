@@ -13,10 +13,10 @@ import csv # Importar para exportación CSV
 
 # Importaciones de ReportLab
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4, landscape, portrait
+from reportlab.lib.pagesizes import A4, landscape, portrait # Import landscape and portrait
 from reportlab.lib.units import mm # Para trabajar con milímetros
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.lib.units import inch # Para ReportLab TableStyle
 
@@ -538,6 +538,11 @@ def download_pdf():
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(A4)) # Changed to landscape A4
     styles = getSampleStyleSheet()
+    
+    # Custom style for table cells to handle long text
+    styles.add(ParagraphStyle(name='TableContent', fontSize=7, leading=9, alignment=colors.TA_CENTER))
+    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=7, leading=9, alignment=colors.TA_LEFT))
+
     story = []
 
     # Title
@@ -554,73 +559,56 @@ def download_pdf():
     story.append(Spacer(1, 0.1 * inch))
 
     # Table Data
-    data = [['Fecha', 'Lugar', 'Entrada', 'Descanso (min)', 'Salida', 'Horas', 'Observaciones', 'Tareas Específicas']]
+    # Removed 'Tareas Específicas' column
+    data = [['Fecha', 'Lugar', 'Entrada', 'Descanso (min)', 'Salida', 'Horas', 'Observaciones']]
     for service in services:
-        specific_tasks_str = ""
-        if service.specific_tasks:
-            try:
-                tasks = json.loads(service.specific_tasks)
-                task_strings = []
-                for task in tasks:
-                    task_strings.append(f"{task.get('description', 'N/A')} ({task.get('duration', 0):.2f}h)")
-                specific_tasks_str = "; ".join(task_strings)
-            except json.JSONDecodeError:
-                specific_tasks_str = "Error al cargar tareas"
+        # Using Paragraph for observations to allow word wrapping
+        obs_paragraph = Paragraph(service.observations if service.observations else '', styles['TableContentLeft'])
 
         data.append([
-            service.date.strftime('%d/%m/%Y'),
-            service.place,
-            service.entry_time.strftime('%H:%M'),
-            str(service.break_duration),
-            service.exit_time.strftime('%H:%M'),
-            f"{service.worked_hours:.2f}",
-            service.observations if service.observations else '',
-            specific_tasks_str
+            Paragraph(service.date.strftime('%d/%m/%Y'), styles['TableContent']),
+            Paragraph(service.place, styles['TableContentLeft']),
+            Paragraph(service.entry_time.strftime('%H:%M'), styles['TableContent']),
+            Paragraph(str(service.break_duration), styles['TableContent']),
+            Paragraph(service.exit_time.strftime('%H:%M'), styles['TableContent']),
+            Paragraph(f"{service.worked_hours:.2f}", styles['TableContent']),
+            obs_paragraph # Use the Paragraph object
         ])
 
-    # Define column widths (adjust as needed for landscape A4)
-    # A4 landscape width is 297mm, height is 210mm
-    # 1 inch = 25.4 mm. So A4 landscape is approx 11.69 x 8.27 inches
-    # Total width for table should be less than 11.69 inches (e.g., 11 inches)
-    # 11 inches = 11 * 72 points = 792 points
-    # Current column widths sum: 40+25+20+20+20+20+100 = 245mm = ~9.65 inches
-    # Let's adjust to fit nicely
-    col_widths = [
-        60, # Fecha
-        80, # Lugar
-        50, # Entrada
-        50, # Descanso
-        50, # Salida
-        50, # Horas
-        150, # Observaciones
-        180  # Tareas Específicas
+    # Define column widths for landscape A4 (297mm width)
+    # Total width of page is ~11.69 inches. Let's use 10.5 inches for table width (756 points)
+    # Distribute 10.5 inches among 7 columns
+    # Fecha, Lugar, Entrada, Descanso, Salida, Horas, Observaciones
+    # Weights: 1.0, 1.5, 1.0, 1.0, 1.0, 1.0, 3.0 (approximate proportions)
+    # Total weight = 9.5
+    # Let's define fixed widths in points for better control, summing up to a bit less than page width
+    # A4 landscape width = 841.89 points. Let's aim for ~780 points total width.
+    col_widths_pts = [
+        60,  # Fecha (approx 21mm)
+        120, # Lugar (approx 42mm)
+        60,  # Entrada (approx 21mm)
+        60,  # Descanso (approx 21mm)
+        60,  # Salida (approx 21mm)
+        60,  # Horas (approx 21mm)
+        360  # Observaciones (approx 127mm - much wider for wrapping)
     ]
-    # Convert mm to points (1mm = 2.83465 points approx, or use inch/mm units)
-    # Let's use ReportLab's units for precision
-    col_widths_pts = [w * mm for w in [25, 40, 20, 20, 20, 20, 60, 80]] # Example adjustment
-
-    # Calculate total width to ensure it fits landscape A4
-    total_table_width_pts = sum(col_widths_pts)
-    # If it's too wide, scale it down or adjust widths
-    # For a general solution, let's make it proportional to page width
-    page_width_pts = landscape(A4)[0] - 2 * inch # Page width minus 1 inch margin on each side
-    
-    # Proportional widths
-    total_fixed_width = sum([25, 40, 20, 20, 20, 20, 60, 80]) # Sum of example mm widths
-    col_widths_pts = [w * (page_width_pts / total_fixed_width) for w in [25, 40, 20, 20, 20, 20, 60, 80]]
     
     table = Table(data, colWidths=col_widths_pts)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')), # Header background
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'), # Header alignment
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
         ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f2f2f2')), # Even rows background
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black), # Thinner grid lines
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('FONTSIZE', (0,0), (-1,-1), 7), # Smaller font for table content
+        ('ALIGN', (0,0), (0,-1), 'CENTER'), # Fecha
+        ('ALIGN', (2,0), (5,-1), 'CENTER'), # Entrada, Descanso, Salida, Horas
+        ('ALIGN', (1,0), (1,-1), 'LEFT'), # Lugar
+        ('ALIGN', (6,0), (6,-1), 'LEFT'), # Observaciones
     ]))
     story.append(table)
     story.append(Spacer(1, 0.2 * inch))
@@ -734,7 +722,11 @@ def generate_tasks_pdf():
         story.append(Paragraph("No hay datos de tareas específicas para este mes.", styles['Normal']))
     else:
         # Adjust column widths for portrait A4
-        col_widths_pts = [4 * inch, 2 * inch] # Example widths for 2 columns
+        # A4 portrait width = 595.27 points. Let's aim for ~550 points total width.
+        col_widths_pts = [
+            400, # Tarea Específica
+            150  # Total Horas
+        ]
 
         table = Table(data, colWidths=col_widths_pts)
         table.setStyle(TableStyle([
