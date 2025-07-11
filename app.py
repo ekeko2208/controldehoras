@@ -462,7 +462,7 @@ def reset_password(token):
 
     if request.method == 'POST':
         new_password = request.form['new_password']
-        confirm_new_password = request.form['confirm_password']
+        confirm_new_password = request.form['confirm_new_password']
         
         if not new_password or len(new_password) < 6:
             flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
@@ -682,9 +682,12 @@ def generate_tasks_pdf():
     services = Service.query.filter_by(user_id=current_user.id).filter(
         db.extract('year', Service.date) == year,
         db.extract('month', Service.date) == month
-    ).all()
+    ).order_by(Service.date.asc()).all() # Order by date to group tasks by day
 
-    tasks_summary_data = defaultdict(float)
+    # Prepare data for the PDF table (Fecha, Tarea Específica, Horas)
+    pdf_table_data = []
+    grand_total_tasks_hours = 0.0
+
     for service in services:
         if service.specific_tasks:
             try:
@@ -693,7 +696,12 @@ def generate_tasks_pdf():
                     description = task.get('description')
                     duration = task.get('duration')
                     if description and isinstance(duration, (int, float)):
-                        tasks_summary_data[description] += duration
+                        pdf_table_data.append([
+                            service.date.strftime('%d/%m/%Y'),
+                            description,
+                            f"{duration:.2f}"
+                        ])
+                        grand_total_tasks_hours += duration
             except json.JSONDecodeError:
                 print(f"Warning: Could not decode specific_tasks for service ID {service.id} during PDF generation.")
 
@@ -702,8 +710,8 @@ def generate_tasks_pdf():
     styles = getSampleStyleSheet()
     
     # Custom style for table cells to handle long text
-    styles.add(ParagraphStyle(name='TableContentCenter', fontSize=10, leading=12, alignment=TA_CENTER))
-    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=10, leading=12, alignment=TA_LEFT))
+    styles.add(ParagraphStyle(name='TableContentCenter', fontSize=9, leading=11, alignment=TA_CENTER)) # Slightly larger font for tasks PDF
+    styles.add(ParagraphStyle(name='TableContentLeft', fontSize=9, leading=11, alignment=TA_LEFT))
 
     story = []
 
@@ -712,7 +720,7 @@ def generate_tasks_pdf():
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ][month - 1]
-    title_text = f"Resumen de Horas por Tarea Específica - {month_name} {year}"
+    title_text = f"Reporte Detallado de Tareas Específicas - {month_name} {year}"
     story.append(Paragraph(title_text, styles['h1']))
     story.append(Spacer(1, 0.2 * inch))
 
@@ -721,21 +729,26 @@ def generate_tasks_pdf():
     story.append(Spacer(1, 0.1 * inch))
 
     # Table Data
-    data = [['Tarea Específica', 'Total Horas']]
-    for task, total_hours in tasks_summary_data.items():
+    # Headers for the new table structure
+    data = [['Fecha', 'Tarea Específica', 'Horas']]
+
+    # Add processed task data to the table
+    for row in pdf_table_data:
         data.append([
-            Paragraph(task, styles['TableContentLeft']), # Use Paragraph for task description
-            Paragraph(f"{total_hours:.2f}", styles['TableContentCenter']) # Use Paragraph for total hours
+            Paragraph(row[0], styles['TableContentCenter']), # Fecha
+            Paragraph(row[1], styles['TableContentLeft']),   # Tarea Específica
+            Paragraph(row[2], styles['TableContentCenter'])  # Horas
         ])
 
-    if not tasks_summary_data:
+    if not pdf_table_data:
         story.append(Paragraph("No hay datos de tareas específicas para este mes.", styles['Normal']))
     else:
-        # Adjust column widths for portrait A4
-        # A4 portrait width = 595.27 points. Let's aim for ~550 points total width.
+        # Adjust column widths for portrait A4 (595.27 points total width)
+        # Aim for ~550 points total width for the table
         col_widths_pts = [
-            400, # Tarea Específica
-            150  # Total Horas
+            70,  # Fecha
+            380, # Tarea Específica (more space for description)
+            100  # Horas
         ]
 
         table = Table(data, colWidths=col_widths_pts)
@@ -749,11 +762,16 @@ def generate_tasks_pdf():
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('BOX', (0, 0), (-1, -1), 1, colors.black),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('FONTSIZE', (0,0), (-1,-1), 10), # Font size for table content
-            ('ALIGN', (0,1), (0,-1), 'LEFT'), # Tarea Específica data (left align)
-            ('ALIGN', (1,1), (1,-1), 'CENTER'), # Total Horas data (center align)
+            ('FONTSIZE', (0,0), (-1,-1), 9), # Font size for table content
+            ('ALIGN', (0,1), (0,-1), 'CENTER'), # Fecha data (center align)
+            ('ALIGN', (1,1), (1,-1), 'LEFT'),   # Tarea Específica data (left align)
+            ('ALIGN', (2,1), (2,-1), 'CENTER'), # Horas data (center align)
         ]))
         story.append(table)
+        story.append(Spacer(1, 0.2 * inch))
+
+        # Grand Total of Specific Tasks
+        story.append(Paragraph(f"<b>Total General de Horas de Tareas Específicas: {grand_total_tasks_hours:.2f}</b>", styles['h2']))
     
     doc.build(story)
     buffer.seek(0)
@@ -761,7 +779,7 @@ def generate_tasks_pdf():
     return send_file(buffer,
                      mimetype='application/pdf',
                      as_attachment=True,
-                     download_name=f'resumen_tareas_especificas_{current_tasks_month_str}.pdf')
+                     download_name=f'reporte_tareas_especificas_{current_tasks_month_str}.pdf')
 
 
 # Database Initialization (for local development or initial setup)
