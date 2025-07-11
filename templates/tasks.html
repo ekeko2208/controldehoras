@@ -257,7 +257,7 @@
             <div class="col-12 col-lg-10 offset-lg-1">
                 <div class="card">
                     <div class="card-header">
-                        <i class="fas fa-chart-bar me-2"></i> Resumen de Horas por Tarea/Lugar ({{ spanish_month_names[current_month.split('-')[1]|int - 1]|capitalize }} {{ current_month.split('-')[0] }})
+                        <i class="fas fa-chart-bar me-2"></i> Resumen de Horas por Tarea Específica ({{ spanish_month_names[current_month.split('-')[1]|int - 1]|capitalize }} {{ current_month.split('-')[0] }})
                         <div class="action-buttons">
                             {# Botón para generar PDF de Tareas #}
                             <a href="{{ url_for('generate_tasks_pdf') }}" class="btn btn-danger">
@@ -271,7 +271,7 @@
                                 <table class="table table-hover table-striped">
                                     <thead>
                                         <tr>
-                                            <th><i class="fas fa-tag"></i> Tarea/Lugar</th>
+                                            <th><i class="fas fa-tag"></i> Tarea Específica</th>
                                             <th><i class="fas fa-hourglass-half"></i> Total Horas</th>
                                         </tr>
                                     </thead>
@@ -286,7 +286,7 @@
                                 </table>
                             </div>
                         {% else %}
-                            <p class="text-center text-muted">No hay datos de tareas para este mes.</p>
+                            <p class="text-center text-muted">No hay datos de tareas específicas para este mes.</p>
                         {% endif %}
                     </div>
                 </div>
