@@ -9,17 +9,23 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin, login_user, LoginManager, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from reportlab.lib.pagesizes import letter
+import csv # Importar para exportación CSV
+
+# Importaciones de ReportLab
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, landscape, portrait
+from reportlab.lib.units import mm # Para trabajar con milímetros
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
-from reportlab.lib.units import inch
+from reportlab.lib.units import inch # Para ReportLab TableStyle
 
-# Initialize Flask App
+
+# --- Configuración de la aplicación Flask ---
 app = Flask(__name__)
 
 # Configuration
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_secret_key_here') # Use environment variable for production
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your_super_secret_key_that_is_very_long_and_random_2024') # Use environment variable for production
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///site.db') # Use environment variable for production
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -39,8 +45,8 @@ def load_user(user_id):
 # Database Models
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(20), unique=True, nullable=False)
-    password_hash = db.Column(db.String(512), nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False) # Increased to 80 for longer usernames
+    password_hash = db.Column(db.String(512), nullable=False) # Increased to 512 for scrypt hashes
     services = db.relationship('Service', backref='author', lazy=True) # One-to-many relationship with Service
 
     def set_password(self, password):
@@ -96,7 +102,8 @@ def redirect_authenticated(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# Routes
+# --- Routes ---
+
 @app.route("/")
 @app.route("/index")
 @login_required
@@ -132,8 +139,7 @@ def index():
                            total_hours_display=total_hours_display,
                            current_month=current_month_str,
                            spanish_month_names=spanish_month_names,
-                           current_username=current_user.username,
-                           search_query=search_query)
+                           current_username=current_user.username)
 
 @app.route("/load_month", methods=['POST'])
 @login_required
@@ -315,19 +321,40 @@ def delete_service(service_id):
 @app.route("/register", methods=['GET', 'POST'])
 @redirect_authenticated
 def register():
+    # Define el código de registro esperado
+    REGISTRATION_CODE = "arles2208." # ¡CÓDIGO DE REGISTRO ESPECIAL!
+
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
-            flash('El nombre de usuario ya existe. Por favor, elige otro.', 'danger')
-            return redirect(url_for('register'))
-        
+        confirm_password = request.form['confirm_password']
+        registration_code = request.form['registration_code'] # Obtener el código del formulario
+
+        # Validar el código de registro
+        if registration_code != REGISTRATION_CODE:
+            flash('Código de registro incorrecto.', 'danger')
+            return render_template('register.html') # Renderiza de nuevo el formulario para que el usuario pueda corregir
+
+        # Validaciones básicas para el registro.
+        if len(username) < 3:
+            flash('El nombre de usuario debe tener al menos 3 caracteres.', 'danger')
+            return render_template('register.html')
+        if len(password) < 6:
+            flash('La contraseña debe tener al menos 6 caracteres.', 'danger')
+            return render_template('register.html')
+        if password != confirm_password:
+            flash('Las contraseñas no coinciden.', 'danger')
+            return render_template('register.html')
+        if User.query.filter_by(username=username).first():
+            flash('El nombre de usuario ya existe.', 'danger')
+            return render_template('register.html')
+
+        # Crea un nuevo usuario y lo guarda en la base de datos.
         new_user = User(username=username)
         new_user.set_password(password)
         db.session.add(new_user)
         db.session.commit()
-        flash('Registro exitoso! Ahora puedes iniciar sesión.', 'success')
+        flash('¡Registro exitoso! Ahora puedes iniciar sesión.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html')
 
@@ -363,8 +390,9 @@ def logout():
 def profile():
     if request.method == 'POST':
         new_username = request.form['username']
-        new_password = request.form.get('password')
-        
+        new_password = request.form.get('new_password') # Usar .get para que no falle si no se envía
+
+        # Lógica para actualizar nombre de usuario
         if new_username != current_user.username:
             existing_user = User.query.filter_by(username=new_username).first()
             if existing_user and existing_user.id != current_user.id:
@@ -373,20 +401,82 @@ def profile():
             current_user.username = new_username
             flash('Nombre de usuario actualizado!', 'success')
         
-        if new_password:
-            current_user.set_password(new_password)
-            flash('Contraseña actualizada!', 'success')
+        # Lógica para cambiar contraseña
+        if new_password: # Solo procesar si se ha proporcionado una nueva contraseña
+            current_password = request.form.get('current_password')
+            confirm_new_password = request.form.get('confirm_new_password')
+
+            if not current_user.check_password(current_password):
+                flash('La contraseña actual es incorrecta.', 'danger')
+            elif len(new_password) < 6:
+                flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
+            elif new_password != confirm_new_password:
+                flash('La nueva contraseña y la confirmación no coinciden.', 'danger')
+            else:
+                current_user.set_password(new_password)
+                flash('Contraseña actualizada!', 'success')
         
         try:
             db.session.commit()
-            flash('Perfil actualizado exitosamente!', 'success')
+            # No es necesario flashear "Perfil actualizado exitosamente!" aquí si ya flasheamos los mensajes específicos
         except Exception as e:
             db.session.rollback()
             flash(f'Error al actualizar el perfil: {e}', 'danger')
         
         return redirect(url_for('profile'))
     
-    return render_template('profile.html', current_username=current_user.username)
+    return render_template('profile.html', user=current_user, current_username=current_user.username)
+
+
+@app.route("/forgot_password", methods=['GET', 'POST'])
+@redirect_authenticated
+def forgot_password():
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        user = User.query.filter_by(username=username).first()
+
+        if user:
+            # En un entorno real, aquí generarías un token único y lo enviarías por correo electrónico.
+            # Por simplicidad, aquí solo flashearemos un mensaje.
+            # reset_link = url_for('reset_password', token='dummy_token_for_demo', _external=True)
+            flash(f'Si el usuario existe, se ha enviado un enlace de restablecimiento de contraseña (funcionalidad de envío de email no implementada en esta demo).', 'info')
+        else:
+            # Es buena práctica no revelar si el usuario existe o no por seguridad.
+            flash('Si el usuario existe, se ha enviado un enlace de restablecimiento de contraseña (funcionalidad de envío de email no implementada en esta demo).', 'info')
+        return redirect(url_for('login'))
+    return render_template('forgot_password.html')
+
+@app.route("/reset_password/<token>", methods=['GET', 'POST'])
+@redirect_authenticated
+def reset_password(token):
+    # En un entorno real, aquí validarías el token:
+    # user_id = verify_reset_token(token) # Necesitarías implementar esta función
+    # if not user_id:
+    #     flash('El enlace de restablecimiento es inválido o ha expirado.', 'danger')
+    #     return redirect(url_for('forgot_password'))
+    
+    # Para esta demo, asumimos que el token es válido y lo pasamos al formulario
+    # y el usuario puede cambiar la contraseña.
+    # En un entorno real, buscarías al usuario por el user_id del token.
+    # user = User.query.get(user_id) 
+
+    if request.method == 'POST':
+        new_password = request.form['new_password']
+        confirm_new_password = request.form['confirm_new_password']
+        
+        if not new_password or len(new_password) < 6:
+            flash('La nueva contraseña debe tener al menos 6 caracteres.', 'danger')
+        elif new_password != confirm_new_password:
+            flash('Las contraseñas no coinciden.', 'danger')
+        else:
+            # Aquí iría la lógica para actualizar la contraseña del usuario real
+            # user.set_password(new_password)
+            # db.session.commit()
+            flash('Tu contraseña ha sido restablecida correctamente (funcionalidad de actualización no implementada en esta demo).', 'success')
+            return redirect(url_for('login'))
+    
+    return render_template('reset_password.html', token=token)
+
 
 @app.route("/export_csv")
 @login_required
@@ -446,7 +536,7 @@ def download_pdf():
     total_hours = sum(service.worked_hours for service in services)
 
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4)) # Changed to landscape A4
     styles = getSampleStyleSheet()
     story = []
 
@@ -455,7 +545,7 @@ def download_pdf():
         "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
         "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
     ][month - 1]
-    title_text = f"Resumen de Servicios - {month_name} {year}"
+    title_text = f"Reporte de Horas Trabajadas para el mes de {month_name} {year}"
     story.append(Paragraph(title_text, styles['h1']))
     story.append(Spacer(1, 0.2 * inch))
 
@@ -488,7 +578,38 @@ def download_pdf():
             specific_tasks_str
         ])
 
-    table = Table(data)
+    # Define column widths (adjust as needed for landscape A4)
+    # A4 landscape width is 297mm, height is 210mm
+    # 1 inch = 25.4 mm. So A4 landscape is approx 11.69 x 8.27 inches
+    # Total width for table should be less than 11.69 inches (e.g., 11 inches)
+    # 11 inches = 11 * 72 points = 792 points
+    # Current column widths sum: 40+25+20+20+20+20+100 = 245mm = ~9.65 inches
+    # Let's adjust to fit nicely
+    col_widths = [
+        60, # Fecha
+        80, # Lugar
+        50, # Entrada
+        50, # Descanso
+        50, # Salida
+        50, # Horas
+        150, # Observaciones
+        180  # Tareas Específicas
+    ]
+    # Convert mm to points (1mm = 2.83465 points approx, or use inch/mm units)
+    # Let's use ReportLab's units for precision
+    col_widths_pts = [w * mm for w in [25, 40, 20, 20, 20, 20, 60, 80]] # Example adjustment
+
+    # Calculate total width to ensure it fits landscape A4
+    total_table_width_pts = sum(col_widths_pts)
+    # If it's too wide, scale it down or adjust widths
+    # For a general solution, let's make it proportional to page width
+    page_width_pts = landscape(A4)[0] - 2 * inch # Page width minus 1 inch margin on each side
+    
+    # Proportional widths
+    total_fixed_width = sum([25, 40, 20, 20, 20, 20, 60, 80]) # Sum of example mm widths
+    col_widths_pts = [w * (page_width_pts / total_fixed_width) for w in [25, 40, 20, 20, 20, 20, 60, 80]]
+    
+    table = Table(data, colWidths=col_widths_pts)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')), # Header background
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
@@ -499,7 +620,7 @@ def download_pdf():
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('FONTSIZE', (0,0), (-1,-1), 8), # Smaller font for table content
+        ('FONTSIZE', (0,0), (-1,-1), 7), # Smaller font for table content
     ]))
     story.append(table)
     story.append(Spacer(1, 0.2 * inch))
@@ -587,7 +708,7 @@ def generate_tasks_pdf():
                 print(f"Warning: Could not decode specific_tasks for service ID {service.id} during PDF generation.")
 
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=portrait(A4)) # Portrait A4 for tasks summary
     styles = getSampleStyleSheet()
     story = []
 
@@ -612,7 +733,10 @@ def generate_tasks_pdf():
     if not tasks_summary_data:
         story.append(Paragraph("No hay datos de tareas específicas para este mes.", styles['Normal']))
     else:
-        table = Table(data)
+        # Adjust column widths for portrait A4
+        col_widths_pts = [4 * inch, 2 * inch] # Example widths for 2 columns
+
+        table = Table(data, colWidths=col_widths_pts)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')), # Header background
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
@@ -636,14 +760,25 @@ def generate_tasks_pdf():
                      download_name=f'resumen_tareas_especificas_{current_tasks_month_str}.pdf')
 
 
-# Database Initialization
+# Database Initialization (for local development or initial setup)
 def create_db():
     with app.app_context():
         db.create_all()
-        print("Database created!")
+        # Create default 'admin' user if it doesn't exist
+        if not User.query.filter_by(username='admin').first():
+            admin_user = User(username='admin')
+            admin_user.set_password('password123') # CHANGE THIS FOR PRODUCTION!
+            db.session.add(admin_user)
+            db.session.commit()
+            print("Default 'admin' user created.")
+        else:
+            print("Default 'admin' user already exists.")
+        print("Database initialized successfully.")
 
 if __name__ == '__main__':
-    # Call create_db() only if you need to create the database tables
-    # For Render, this is usually handled by a build step or entrypoint command
+    # This block is typically for local development.
+    # For Render, the 'init_db.py' script handles database creation.
+    # You can uncomment create_db() if you run app.py directly for local testing
+    # and want to ensure tables are created/admin user exists.
     # create_db() 
     app.run(debug=True)
