@@ -198,21 +198,20 @@
                     existingTasks = []; // Default to empty array on error
                 }
             } else {
-                // If the script tag is empty or not found, existingTasks remains an empty array
                 console.warn("No se encontraron datos de tareas específicas en la etiqueta script o la etiqueta está vacía.");
             }
             
+            // ONLY add task fields if there are existing tasks
             if (existingTasks && existingTasks.length > 0) {
                 existingTasks.forEach(task => {
                     addTaskField(task.description, task.duration);
                 });
-            } else {
-                // If no existing tasks, add one empty field to start
-                addTaskField();
             }
+            // IMPORTANT: Removed the 'else { addTaskField(); }' block here.
+            // This ensures no empty task field is added by default if no existing tasks.
 
             addTaskBtn.addEventListener('click', function() {
-                addTaskField();
+                addTaskField(); // This will now be the ONLY way to add a new task field if none exist.
             });
         });
     </script>
