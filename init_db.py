@@ -13,13 +13,13 @@ with app.app_context():
     db.create_all()
 
     # Crea el usuario 'admin' por defecto si no existe en la base de datos
-    if not User.query.filter_by(username='Arles').first():
-        admin_user = User(username='Arles')
+    if not User.query.filter_by(username='admin').first():
+        admin_user = User(username='admin')
         admin_user.set_password(DEFAULT_ADMIN_PASSWORD)
         db.session.add(admin_user)
         db.session.commit()
-        print("Usuario 'Arles' creado por defecto con contraseña:", DEFAULT_ADMIN_PASSWORD)
+        print("Usuario 'admin' creado por defecto con contraseña:", DEFAULT_ADMIN_PASSWORD)
     else:
-        print("El usuario 'Arles' ya existe.")
+        print("El usuario 'admin' ya existe.")
 
     print("Base de datos inicializada correctamente.")
