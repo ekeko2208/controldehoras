@@ -8,6 +8,7 @@ import io
 import math
 from functools import wraps
 from collections import defaultdict # Para agrupar tareas
+import csv # Importar para exportación CSV
 
 # Importaciones de ReportLab
 from reportlab.pdfgen import canvas
@@ -583,6 +584,60 @@ def preview_pdf():
         flash(f"Error al generar la vista previa del PDF: {e}", "danger")
         return redirect(url_for('index'))
 
+# Ruta para exportar servicios a CSV. (AÑADIDA)
+@app.route('/export_csv')
+@login_required
+def export_csv():
+    user_id = session['user_id']
+    selected_month_str = session.get('current_month_selected')
+
+    try:
+        selected_month_dt = datetime.strptime(selected_month_str, "%Y-%m")
+        start_date = selected_month_dt.replace(day=1).date()
+        if selected_month_dt.month == 12:
+            end_date = selected_month_dt.replace(year=selected_month_dt.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            end_date = selected_month_dt.replace(month=selected_month_dt.month + 1, day=1) - timedelta(days=1)
+        end_date = end_date.date()
+
+        services = Service.query.filter(
+            Service.user_id == user_id,
+            Service.date >= start_date,
+            Service.date <= end_date
+        ).order_by(Service.date).all()
+
+        # Crear un buffer en memoria para el archivo CSV.
+        si = io.StringIO()
+        cw = csv.writer(si)
+
+        # Escribir la cabecera del CSV.
+        cw.writerow(['Fecha', 'Lugar', 'Hora Entrada', 'Duracion Break (min)', 'Hora Salida', 'Horas Trabajadas', 'Observaciones'])
+
+        # Escribir los datos de cada servicio.
+        for service in services:
+            cw.writerow([
+                service.date.strftime('%Y-%m-%d'),
+                service.place,
+                service.entry_time.strftime('%H:%M'),
+                service.break_duration,
+                service.exit_time.strftime('%H:%M'),
+                f"{service.worked_hours:.2f}",
+                service.observations if service.observations else ''
+            ])
+
+        output = io.BytesIO(si.getvalue().encode('utf-8'))
+        output.seek(0)
+
+        # Enviar el archivo CSV como descarga.
+        return send_file(output,
+                         mimetype='text/csv',
+                         download_name=f'servicios_{session["username"]}_{selected_month_str}.csv',
+                         as_attachment=True)
+    except Exception as e:
+        flash(f"Error al exportar CSV: {e}", "danger")
+        return redirect(url_for('index'))
+
+
 # NUEVA RUTA: Resumen de Tareas Específicas
 @app.route('/tasks_summary', methods=['GET', 'POST'])
 @login_required
@@ -721,8 +776,14 @@ def forgot_password():
         user = User.query.filter_by(username=username).first()
 
         if user:
+            # En un entorno real, aquí generarías un token único y lo enviarías por correo electrónico.
+            # Por simplicidad, aquí solo flashearemos un mensaje.
+            # Enlace de ejemplo (no funcional sin un sistema de tokens real):
+            # token = generate_reset_token(user.id) # Necesitarías implementar esta función
+            # reset_link = url_for('reset_password', token=token, _external=True)
             flash(f'Si el usuario existe, se ha enviado un enlace de restablecimiento de contraseña (funcionalidad no implementada en esta demo).', 'info')
         else:
+            # Es buena práctica no revelar si el usuario existe o no por seguridad.
             flash('Si el usuario existe, se ha enviado un enlace de restablecimiento de contraseña (funcionalidad no implementada en esta demo).', 'info')
         return redirect(url_for('login'))
     return render_template('forgot_password.html')
@@ -789,7 +850,7 @@ if __name__ == '__main__':
 
         if not User.query.filter_by(username='Arles').first():
             admin_user = User(username='Arles')
-            admin_user.set_password('password123') 
+            admin_user.set_password('arles2208') 
             db.session.add(admin_user)
             db.session.commit()
             print("Usuario 'Arles' creado por defecto.")
